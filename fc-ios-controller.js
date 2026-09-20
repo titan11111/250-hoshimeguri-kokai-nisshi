@@ -62,6 +62,7 @@ function initFcIosController(opts = {}) {
   let dpadPid = null;
 
   function setDpad(up, down, left, right) {
+    const changed = !K.ArrowUp !== !up || !K.ArrowDown !== !down || !K.ArrowLeft !== !left || !K.ArrowRight !== !right;
     K.ArrowUp = up;
     K.ArrowDown = down;
     K.ArrowLeft = left;
@@ -74,6 +75,7 @@ function initFcIosController(opts = {}) {
       dpadEl.classList.toggle("pressed", up || down || left || right);
     }
     emit();
+    if (changed && (up || down || left || right) && navigator.vibrate) navigator.vibrate(8);
   }
 
   function calcDpad(e) {
@@ -89,9 +91,6 @@ function initFcIosController(opts = {}) {
       return;
     }
     setDpad(dy < -thr, dy > thr, dx < -thr, dx > thr);
-    if (navigator.vibrate && (K.ArrowUp || K.ArrowDown || K.ArrowLeft || K.ArrowRight)) {
-      navigator.vibrate(8);
-    }
   }
 
   if (dpadWrap) {

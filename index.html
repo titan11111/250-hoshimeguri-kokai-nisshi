@@ -83,12 +83,18 @@
     height:min(28vw, calc(25dvh - 36px), 120px);
   }
   #control-deck .fc-sysbtn{
-    width:48px; height:48px; min-width:48px; min-height:48px;
-    font-size:5px; letter-spacing:0;
+    width:52px; height:48px; min-width:48px; min-height:48px;
+    font-size:9px; letter-spacing:.04em; border-radius:10px;
   }
   #control-deck .fc-abbtn{
     width:clamp(48px, 12vw, 64px); height:clamp(48px, 12vw, 64px);
     min-width:48px; min-height:48px;
+  }
+  #control-deck .fc-abbtn i{ transform:translateY(-5px); }
+  #control-deck .fc-cap{
+    position:absolute; left:0; right:0; bottom:7px; text-align:center;
+    font-size:8px; font-family:var(--ui); font-style:normal; color:rgba(0,0,0,.62);
+    letter-spacing:.04em; pointer-events:none;
   }
 
   .layer{position:absolute;inset:0;display:flex;flex-direction:column}
@@ -131,8 +137,8 @@
   .rail-in{display:flex;align-items:flex-end;gap:0;min-width:max-content;position:relative;padding:34px 6px 0}
   .rail-in::before{content:"";position:absolute;left:0;right:0;bottom:22px;height:1px;
     background:linear-gradient(90deg,rgba(232,163,61,.55),rgba(207,226,244,.16))}
-  .stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:9px;padding:0 4px;
-        background:none;min-width:62px}
+  .stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 6px;
+        background:none;min-width:56px;min-height:48px}
   .stop .dot{border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;transition:.2s}
   .stop .lbl{font-size:11.5px;color:var(--star-dim);letter-spacing:.08em;white-space:nowrap;transition:.2s}
   .stop .pct{font-family:var(--mono);font-size:9.5px;color:rgba(232,163,61,.75);height:11px}
@@ -170,11 +176,12 @@
   #bar{height:2px;background:rgba(207,226,244,.16);margin-top:8px}
   #bar i{display:block;height:100%;width:0%;background:var(--amber);transition:width .25s}
   #reticle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:78px;height:78px;opacity:.9}
-  #hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);text-align:center;
-    font-size:11.5px;color:rgba(207,226,244,.62);letter-spacing:.07em;line-height:1.8;white-space:nowrap}
+  #hint{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);text-align:center;
+    font-size:11.5px;color:rgba(207,226,244,.62);letter-spacing:.07em;line-height:1.6;
+    white-space:normal;max-width:92%;pointer-events:none}
   #hint b{color:var(--amber);font-family:var(--mono);font-weight:500}
-  #action{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);pointer-events:auto;
-    display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  #action{position:absolute;left:50%;bottom:42px;transform:translateX(-50%);pointer-events:auto;
+    display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:94%}
   #topRight{position:absolute;top:calc(15px + env(safe-area-inset-top,0px));right:15px;display:flex;gap:8px;pointer-events:auto}
   #tgtLabel{position:absolute;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--amber);
     transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 8px #000}
@@ -255,7 +262,9 @@
   @media (max-width:640px){
     #detail{grid-template-columns:1fr;gap:12px;padding:14px 15px}
     #detail h3{font-size:20px}
-    #hint{display:none}
+    #hint{display:block;font-size:11px;bottom:6px}
+    #action{bottom:40px}
+    #navBox{min-width:0;max-width:58%;padding:7px 10px;font-size:10.5px}
     .entries{grid-template-columns:1fr}
     #log .sheet{width:100%}
     .shots img{width:104px}
@@ -280,13 +289,13 @@
       </div>
     </div>
     <div class="fc-deck-center">
-      <button type="button" class="fc-sysbtn" id="fc-btn-select" aria-label="加速">SELECT</button>
-      <button type="button" class="fc-sysbtn" id="fc-btn-start" aria-label="一時停止">START</button>
+      <button type="button" class="fc-sysbtn" id="fc-btn-select" aria-label="加速">加速</button>
+      <button type="button" class="fc-sysbtn" id="fc-btn-start" aria-label="一時停止">停止</button>
     </div>
     <div class="fc-deck-right">
       <div class="fc-ab" aria-label="A B ボタン">
-        <button type="button" class="fc-abbtn fc-abbtn-b" id="fc-btn-b" aria-label="撮影"><i>B</i></button>
-        <button type="button" class="fc-abbtn fc-abbtn-a" id="fc-btn-a" aria-label="記録"><i>A</i></button>
+        <button type="button" class="fc-abbtn fc-abbtn-b" id="fc-btn-b" aria-label="撮影"><i>B</i><span class="fc-cap">撮影</span></button>
+        <button type="button" class="fc-abbtn fc-abbtn-a" id="fc-btn-a" aria-label="記録"><i>A</i><span class="fc-cap">記録</span></button>
       </div>
     </div>
   </footer>
@@ -313,12 +322,12 @@
         <button class="btn primary" id="btnStart">出港する</button>
         <button class="btn" id="btnLog0">航海日誌</button>
       </div>
-      <div class="ver">十字 ─ 移動 ・ A 記録/着陸 ・ B 撮影 ・ SELECT 加速 ・ START ポーズ</div>
+      <div class="ver">十字 ─ 移動 ・ A 記録/着陸 ・ B 撮影 ・ 加速 ・ 停止でポーズ</div>
     </div>
   </div>
 
   <!-- 星図 -->
-  <div class="layer pad" id="map" hidden>
+  <div class="layer pad" id="map" hidden data-scrollable>
     <div class="head">
       <div><div class="eyebrow">STAR CHART ─ 星図</div><h2>行き先を選ぶ</h2></div>
       <div class="prog">航海達成率 <b id="mapPct">0%</b></div>
@@ -372,7 +381,7 @@
   </div>
 
   <!-- 日誌 -->
-  <div class="layer pad" id="log" hidden>
+  <div class="layer pad" id="log" hidden data-scrollable>
     <div class="sheet">
       <div class="close"><button class="btn" id="btnLogX">閉じる</button></div>
       <div class="lhead">
@@ -876,7 +885,26 @@ let CUR = null, CURSAT = false;   // 現在の天体 / 衛星側か
 let pendingShot = null;
 
 const K = {};
-const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5 };
+const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5, tboost:0, steerX:0, steerY:0 };
+function usePadHint(){
+  try{ return window.matchMedia('(pointer:coarse)').matches || window.innerWidth<=640; }catch(e){ return window.innerWidth<=640; }
+}
+function onPtr(el, fn){
+  if(!el) return;
+  el.addEventListener('pointerdown', e=>{
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    e.preventDefault();
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    el.classList.add('pressed');
+    if(navigator.vibrate) navigator.vibrate(15);
+    unlockAudio();
+    fn(e);
+  }, {passive:false});
+  const up = ()=>el.classList.remove('pressed');
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  el.addEventListener('lostpointercapture', up);
+}
 
 function initEngine(){
   const host = $('screen-wrap');
@@ -996,14 +1024,21 @@ function bindInput(){
   let drag=false, lx=0, ly=0, pid=null;
   const start = e => {
     if(e.target.closest && e.target.closest('#control-deck')) return;
+    if(!$('title').hidden || !$('map').hidden || !$('log').hidden) return;
     if(e.pointerType==='mouse' && e.button!==0) return;
+    e.preventDefault();
     drag=true; lx=e.clientX; ly=e.clientY; pid=e.pointerId;
     try{ el.setPointerCapture(e.pointerId); }catch(_){}
   };
   const move = e => {
     if(!drag || e.pointerId!==pid) return;
-    IN.look.x += (e.clientX-lx)*0.0042; IN.look.y += (e.clientY-ly)*0.0035;
-    IN.look.y = clamp(IN.look.y, -0.62, 0.95);
+    const dx=e.clientX-lx, dy=e.clientY-ly;
+    if(MODE==='cruise'||MODE==='orbit'){
+      IN.steerX += dx; IN.steerY += dy;
+    } else {
+      IN.look.x += dx*0.0042; IN.look.y += dy*0.0035;
+      IN.look.y = clamp(IN.look.y, -0.62, 0.95);
+    }
     lx=e.clientX; ly=e.clientY;
   };
   const end = e => {
@@ -1027,19 +1062,23 @@ function bindInput(){
     lastTouchEnd=now;
   }, {passive:false});
 
-  $('btnResume').addEventListener('click', ()=>setPaused(false));
-  $('btnMuteDlg').addEventListener('click', ()=>{ Audio2.toggle(); toast('音響', Audio2.on?'音 入':'音 切','',true); });
-  $('btnQuitMap').addEventListener('click', ()=>{ setPaused(false); openMap(); });
+  onPtr($('btnResume'), ()=>setPaused(false));
+  onPtr($('btnMuteDlg'), ()=>{ Audio2.toggle(); syncMuteBtn(); toast('音響', Audio2.on?'音 入':'音 切','',true); });
+  onPtr($('btnQuitMap'), ()=>{ setPaused(false); openMap(); });
 }
 function readInput(){
   const k=K;
   IN.fwd  = clamp((k.w||k.ArrowUp?1:0) - (k.s||k.ArrowDown?1:0), -1, 1);
-  IN.side = clamp((k.d?1:0) - (k.a?1:0), -1, 1);
+  IN.side = clamp((k.d||k.ArrowRight?1:0) - (k.a||k.ArrowLeft?1:0), -1, 1);
   IN.rot  = (k.ArrowRight?1:0) - (k.ArrowLeft?1:0);
   IN.turn = clamp(IN.side + IN.rot, -1, 1);
   IN.boost = (k.Shift||IN.tboost)?1:0;
   if(k[' ']) IN.jump = true;
-  if(MODE==='surface' && IN.rot) IN.look.x -= IN.rot*0.028;
+  if(MODE==='surface' && IN.rot){
+    IN.look.x -= IN.rot*0.045;
+    IN.side = 0;
+    IN.turn = 0;
+  }
 }
 
 /* ── 主ループ ─────────────────────────────────── */
@@ -1160,14 +1199,19 @@ function startCruise(bodyId){
   scene.add(G.dust);
   hudMode('cruise');
   Audio2.ambience(64, 0.07);
-  toast('出港', b.name+'へ針路', 'WASDで操縦・SHIFTで加速・Fで自動操縦', true);
+  toast('出港', b.name+'へ針路', usePadHint()?'十字で操縦・画面をなぞって旋回・加速で速く':'WASDで操縦・SHIFTで加速・Fで自動操縦', true);
 }
 function shipFlight(dt, rate, minS, maxS){
   if(!G.q) G.q = new THREE.Quaternion().copy(G.ship.quaternion);
+  const sx = clamp(IN.steerX*0.012, -1, 1);
+  const sy = clamp(IN.steerY*0.012, -1, 1);
+  IN.steerX = 0; IN.steerY = 0;
+  const pitch = clamp(IN.fwd + sy, -1, 1);
+  const yaw = clamp(IN.turn + sx, -1, 1);
   const dq = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(-IN.fwd*rate*dt, -IN.turn*rate*dt, 0, 'YXZ'));
+    new THREE.Euler(-pitch*rate*dt, -yaw*rate*dt, 0, 'YXZ'));
   G.q.multiply(dq);
-  G.roll = lerp(G.roll||0, -IN.turn*0.44, clamp(dt*3,0,1));
+  G.roll = lerp(G.roll||0, -yaw*0.44, clamp(dt*3,0,1));
   const rq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), G.roll);
   G.ship.quaternion.copy(G.q).multiply(rq);
   const tgt = IN.boost ? maxS : (K[' ']? minS*0.35 : minS);
@@ -1190,11 +1234,12 @@ function chaseCam(dt, dist, height){
 }
 function updCruise(dt){
   const b = G.body;
+  const steering = Math.abs(IN.fwd)>0.05 || Math.abs(IN.turn)>0.05 || Math.abs(IN.steerX)>2 || Math.abs(IN.steerY)>2;
   const fwd = shipFlight(dt, 0.85, 150, 620);
   // 自動操縦・軽い航路補正
   const toT = G.target.position.clone().sub(G.ship.position);
   const dist = toT.length();
-  if(G.auto || (Math.abs(IN.fwd)<0.05 && Math.abs(IN.side)<0.05)){
+  if(G.auto || !steering){
     const m = new THREE.Matrix4().lookAt(G.ship.position, G.target.position, new THREE.Vector3(0,1,0));
     const qt = new THREE.Quaternion().setFromRotationMatrix(m);
     G.q.slerp(qt, clamp(dt*(G.auto?0.9:0.2),0,1));
@@ -1218,7 +1263,9 @@ function updCruise(dt){
     l2:'残距離', v2:fmtKm(dist, b),
     l3:'速度', v3:Math.round(G.speed*640).toLocaleString()+' km/h',
     bar:prog*100 });
-  setHint('<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>SPACE</b> 減速 ・ <b>C</b> 後方視界 ・ <b>F</b> 自動操縦'
+  setHint((usePadHint()
+    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>加速</b> ・ <b>B</b> 撮影'
+    : '<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>SPACE</b> 減速 ・ <b>C</b> 後方視界 ・ <b>F</b> 自動操縦')
     + (off>18 ? ' ── <b style="color:var(--ember)">針路ずれ '+off.toFixed(0)+'°</b>' : ''));
   if(off>22 && !G.warned){ G.warned=1; setTimeout(()=>G.warned=0, 6000); }
   if(dist < b.rad*3.1) enterOrbit(b);
@@ -1340,8 +1387,10 @@ function updOrbit(dt){
   if(near && nd < R*2.6) showLabel(near.position, (near.userData.done?'記録済 ':'観測目標 ')+near.userData.rec.n);
   else if(G.sat && G.sat.position.distanceTo(G.ship.position)<R*2.2) showLabel(G.sat.position, b.sat.name);
   else hideLabel();
-  setHint('<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>E</b> 観測 ・ <b>P</b> 撮影'
-    + (landable? ' ・ <b>L</b> 降下':'') + ' ・ <b>ESC</b> 星図');
+  setHint(usePadHint()
+    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>A</b> 観測'+(landable?'/着陸':'')+' ・ <b>B</b> 撮影'
+    : '<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>E</b> 観測 ・ <b>P</b> 撮影'
+      + (landable? ' ・ <b>L</b> 降下':'') + ' ・ <b>ESC</b> 星図');
 }
 
 /* ── 画面上のラベル ─────────────────────────── */
@@ -1817,7 +1866,9 @@ function updSurface(dt){
   acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
   acts.push({l:'船に戻る', k:'', f:()=>enterOrbit(CUR)});
   setActions(acts);
-  setHint('<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影'
+  setHint((usePadHint()
+    ? '<b>十字</b> 前後・旋回 ・ 画面ドラッグで視点 ・ <b>A</b> 記録 ・ <b>B</b> 撮影 ・ <b>加速</b> ジャンプ'
+    : '<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影')
     + (G.skyShot? ' ── <b style="color:var(--amber)">空に見えるものを撮ってみる</b>':''));
 }
 /* ===========================================================
@@ -1868,9 +1919,10 @@ function setActions(list){
   const host = $('action'); host.innerHTML='';
   list.forEach(a=>{
     const b = document.createElement('button');
+    b.type = 'button';
     b.className = 'btn' + (a.k==='E'||a.k==='L' ? ' primary':'');
     b.innerHTML = a.l + (a.k? ' <span style="opacity:.6;font-family:var(--mono);font-size:11px">['+a.k+']</span>':'');
-    b.addEventListener('click', ()=>{ a.f(); b.blur(); });
+    onPtr(b, ()=>{ a.f(); b.blur(); });
     host.appendChild(b);
   });
 }
@@ -1893,7 +1945,10 @@ function renderRail(){
   ROUTE.forEach((id,i)=>{
     const b = BY_ID[id], s = bodyScore(b);
     const btn = document.createElement('button');
-    btn.className='stop'; btn.setAttribute('aria-current', id===SEL? 'true':'false');
+    btn.type='button';
+    btn.className='stop';
+    if(id===SEL) btn.setAttribute('aria-current','true');
+    else btn.removeAttribute('aria-current');
     const size = clamp(Math.round(b.rad*0.075)+9, 11, 30);
     const done = s.got>=s.total;
     btn.innerHTML =
@@ -1903,7 +1958,7 @@ function renderRail(){
       + '<div class="tick"></div>'
       + '<div class="lbl">'+b.name+'</div>';
     btn.style.paddingLeft = (i===0?0:Math.min(10+i*4,34))+'px';
-    btn.addEventListener('click', ()=>{ SEL=id; renderRail(); renderDetail(); });
+    onPtr(btn, ()=>{ SEL=id; renderRail(); renderDetail(); });
     rail.appendChild(btn);
   });
 }
@@ -2027,7 +2082,7 @@ function boot(){
     $('map').hidden = true;
     startCruise(SEL);
   });
-  $('log').addEventListener('click', e=>{ if(e.target===$('log')) toggleLog(); });
+  $('log').addEventListener('pointerdown', e=>{ if(e.target===$('log')) toggleLog(); });
 }
 boot();
 

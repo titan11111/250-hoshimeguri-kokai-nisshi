@@ -28,11 +28,13 @@
 
 - 画面構成: 上75% `#game-stage` / 下25% `#control-deck`（ハーネス契約）
 - 入力: Pointer Events + `setPointerCapture`
-- 十字: 移動
+- 十字: 航行は機首/旋回。地表は前後移動＋左右で視点旋回（平行移動と重ねない）
+- 航行中の画面ドラッグ: 旋回（チェイスカメラが視点を上書きするため）
 - A: 記録 / 着陸
 - B: 撮影
-- SELECT: 加速
-- START: ポーズ
+- 加速（旧SELECT）: 加速。地表ではジャンプ
+- 停止（旧START）: ポーズ
+- HUD・星図・ポーズのボタンは pointerdown + setPointerCapture
 - ミュート: ポーズ内「音の切り替え」と `m` キー。キー `tg.250.mute`
 - 航海記録: `hoshimeguri.v1`（既存キー維持）
 - 開始: タイトル「出港する」の pointerdown で AudioContext unlock
