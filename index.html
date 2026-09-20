@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#060812">
+<title>星めぐり航海日誌</title>
+<link rel="stylesheet" href="fc-ios-controller.css">
+<style>
+  :root{
+    --ink:#060812;          /* 宇宙の墨 */
+    --ink-2:#0c1224;        /* 計器盤 */
+    --ink-3:#151d33;
+    --amber:#e8a33d;        /* 計器の琥珀 */
+    --amber-dim:#8c6a2c;
+    --star:#cfe2f4;         /* 星光 */
+    --star-dim:#8ba3bd;
+    --paper:#e9e0c9;        /* 日誌の紙 */
+    --paper-2:#d6c9a8;
+    --sepia:#4a3b28;
+    --ember:#c8503c;        /* 火星の緋 */
+    --verdi:#57a897;        /* 緑青 */
+    --line:rgba(232,163,61,.28);
+    --line-soft:rgba(207,226,244,.14);
+    --mono:ui-monospace,"SFMono-Regular",Menlo,monospace;
+    --disp:"Hiragino Mincho ProN","Yu Mincho",serif;
+    --ui:"Hiragino Sans","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  }
+  *, *::before, *::after{
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-touch-callout:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-user-drag:none;
+  }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; height:100dvh;
+    overflow:hidden; overscroll-behavior:none; position:fixed;
+    background:var(--ink); color:var(--star); font-family:var(--ui);
+    touch-action:manipulation;
+  }
+  .btn{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  #game-shell{
+    position:fixed; inset:0; width:100%; height:100%; height:100dvh;
+    display:flex; flex-direction:column; touch-action:none;
+  }
+  #game-stage{order:1; position:relative; flex:0 0 75%; height:75%; min-height:0}
+  #control-deck{order:2}
+  #screen-wrap{position:absolute; inset:0; overflow:hidden; background:var(--ink)}
+  #star-stack{
+    position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden;
+    background:#03050c;
+  }
+  #star-stack canvas{
+    position:absolute; left:-18%; top:-18%; width:136%; height:136%;
+    mix-blend-mode:screen;
+  }
+  #screen-wrap>canvas{
+    position:absolute; inset:0; display:block; width:100%; height:100%; touch-action:none; z-index:1;
+  }
+  #game{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2}
+  #game .layer, #game #toasts, #game #flash{pointer-events:none}
+  #game #title, #game #map, #game #log, #game #loading{pointer-events:auto}
+  #map, #log{touch-action:pan-y; -webkit-overflow-scrolling:touch}
+  .rail{touch-action:pan-x}
+
+  #control-deck.fc-control-deck{
+    flex:0 0 25%; height:25%; min-height:0;
+    padding-bottom:max(8px, env(safe-area-inset-bottom, 8px));
+  }
+  #control-deck .fc-deck-left{justify-content:center}
+  #control-deck .fc-deck-right{justify-content:center}
+  #control-deck .fc-dpad-wrap,
+  #control-deck .fc-ab{
+    min-width:88px; min-height:88px;
+    width:min(28vw, calc(25dvh - 36px), 120px);
+    height:min(28vw, calc(25dvh - 36px), 120px);
+  }
+  #control-deck .fc-sysbtn{
+    width:48px; height:48px; min-width:48px; min-height:48px;
+    font-size:5px; letter-spacing:0;
+  }
+  #control-deck .fc-abbtn{
+    width:clamp(48px, 12vw, 64px); height:clamp(48px, 12vw, 64px);
+    min-width:48px; min-height:48px;
+  }
+
+  .layer{position:absolute;inset:0;display:flex;flex-direction:column}
+  .layer[hidden]{display:none!important}
+  .pad{padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px}
+
+  /* ── 共通パーツ ───────────────────────── */
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--amber);opacity:.85}
+  .rule{height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .btn{font-family:var(--ui);font-weight:500;font-size:14px;padding:11px 20px;border:1px solid var(--line);
+       background:rgba(12,18,36,.72);color:var(--star);letter-spacing:.06em;
+       transition:transform .08s ease, opacity .08s ease, background .08s ease, border-color .08s ease, color .08s ease;
+       backdrop-filter:blur(6px); min-height:48px}
+  .btn:hover{border-color:var(--amber);background:rgba(232,163,61,.12);color:#fff}
+  .btn:active, .btn.pressed{transform:scale(0.92); opacity:.88}
+  .btn.primary{border-color:var(--amber);color:#ffd79a;background:rgba(232,163,61,.14)}
+  .btn.primary:hover{background:rgba(232,163,61,.26);color:#fff}
+  .btn:disabled{opacity:.34;cursor:default}
+  .btn.ghost{border-color:var(--line-soft);font-size:13px;padding:8px 14px}
+
+  /* ── タイトル ─────────────────────────── */
+  #title{justify-content:center;align-items:center;text-align:center;
+    background:radial-gradient(ellipse at 50% 120%,rgba(47,111,181,.30),transparent 62%)}
+  #title .inner{max-width:560px;padding:0 20px;animation:fadeUp 1.1s ease both}
+  #title h1{font-family:var(--disp);font-weight:700;font-size:clamp(34px,8vw,62px);margin:8px 0 6px;
+    letter-spacing:.16em;text-wrap:balance;color:#f3ead6;text-shadow:0 0 34px rgba(232,163,61,.28)}
+  #title .sub{font-size:13.5px;line-height:1.9;color:var(--star-dim);margin:14px auto 30px;max-width:30em}
+  #title .acts{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  #title .ver{margin-top:26px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:rgba(139,163,189,.5)}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  /* ── 星図 ──────────────────────────────── */
+  #map{background:linear-gradient(180deg,rgba(6,8,18,.9),rgba(6,8,18,.97));overflow-y:auto}
+  #map .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  #map h2{font-family:var(--disp);font-size:clamp(20px,4vw,27px);margin:4px 0 0;letter-spacing:.14em;font-weight:500}
+  #map .prog{font-family:var(--mono);font-size:12px;color:var(--star-dim);letter-spacing:.1em}
+  #map .prog b{color:var(--amber);font-size:17px;font-weight:500}
+  .rail{margin:20px 0 14px;overflow-x:auto;overflow-y:hidden;padding-bottom:10px;scrollbar-width:thin}
+  .rail-in{display:flex;align-items:flex-end;gap:0;min-width:max-content;position:relative;padding:34px 6px 0}
+  .rail-in::before{content:"";position:absolute;left:0;right:0;bottom:22px;height:1px;
+    background:linear-gradient(90deg,rgba(232,163,61,.55),rgba(207,226,244,.16))}
+  .stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:9px;padding:0 4px;
+        background:none;min-width:62px}
+  .stop .dot{border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;transition:.2s}
+  .stop .lbl{font-size:11.5px;color:var(--star-dim);letter-spacing:.08em;white-space:nowrap;transition:.2s}
+  .stop .pct{font-family:var(--mono);font-size:9.5px;color:rgba(232,163,61,.75);height:11px}
+  .stop:hover .lbl,.stop[aria-current="true"] .lbl{color:#fff}
+  .stop:hover .dot{transform:scale(1.18)}
+  .stop[aria-current="true"] .dot{box-shadow:0 0 0 2px var(--amber),0 0 22px rgba(232,163,61,.5)}
+  .stop .tick{width:1px;height:12px;background:var(--line-soft)}
+
+  #detail{display:grid;grid-template-columns:1.25fr .85fr;gap:18px;border:1px solid var(--line);
+    background:linear-gradient(140deg,rgba(12,18,36,.92),rgba(6,8,18,.86));padding:18px 20px;flex:0 0 auto}
+  #detail h3{font-family:var(--disp);font-size:24px;margin:6px 0 2px;letter-spacing:.1em;font-weight:500}
+  #detail .kana{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:var(--amber);opacity:.8}
+  #detail .mission{font-size:13.5px;line-height:1.95;color:#c3d3e4;margin:12px 0 0;max-width:34em}
+  #detail dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:12.5px}
+  #detail dt{color:var(--star-dim);letter-spacing:.06em}
+  #detail dd{margin:0;font-family:var(--mono);color:#e4eef8}
+  #detail .go{margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.14em;border:1px solid;padding:3px 7px;white-space:nowrap}
+  .stamp.on{color:var(--verdi);border-color:rgba(87,168,151,.5)}
+  .stamp.off{color:rgba(139,163,189,.55);border-color:var(--line-soft)}
+
+  /* ── HUD（航行・周回） ─────────────────── */
+  #hud{pointer-events:none}
+  #hud .corner{position:absolute;width:26px;height:26px;border:1px solid var(--line);margin:8px}
+  #hud .c1{top:0;left:0;border-right:0;border-bottom:0}
+  #hud .c2{top:0;right:0;border-left:0;border-bottom:0}
+  #hud .c3{bottom:0;left:0;border-right:0;border-top:0}
+  #hud .c4{bottom:0;right:0;border-left:0;border-top:0}
+  .hudbox{position:absolute;background:rgba(6,8,18,.5);border:1px solid var(--line-soft);padding:9px 13px;
+          backdrop-filter:blur(4px);font-family:var(--mono);font-size:11.5px;letter-spacing:.06em}
+  #navBox{top:calc(15px + env(safe-area-inset-top,0px));left:15px;min-width:186px}
+  #navBox .t{color:var(--amber);font-size:10px;letter-spacing:.2em;margin-bottom:6px}
+  #navBox .row{display:flex;justify-content:space-between;gap:12px;line-height:1.85;color:#cfe2f4}
+  #navBox .row span:last-child{font-variant-numeric:tabular-nums;color:#fff}
+  #bar{height:2px;background:rgba(207,226,244,.16);margin-top:8px}
+  #bar i{display:block;height:100%;width:0%;background:var(--amber);transition:width .25s}
+  #reticle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:78px;height:78px;opacity:.9}
+  #hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);text-align:center;
+    font-size:11.5px;color:rgba(207,226,244,.62);letter-spacing:.07em;line-height:1.8;white-space:nowrap}
+  #hint b{color:var(--amber);font-family:var(--mono);font-weight:500}
+  #action{position:absolute;left:50%;bottom:52px;transform:translateX(-50%);pointer-events:auto;
+    display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  #topRight{position:absolute;top:calc(15px + env(safe-area-inset-top,0px));right:15px;display:flex;gap:8px;pointer-events:auto}
+  #tgtLabel{position:absolute;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--amber);
+    transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 8px #000}
+
+  /* ── 着陸シーケンス ────────────────────── */
+  #descend{justify-content:flex-end;align-items:center;pointer-events:none;text-align:center}
+  #descend .card{margin-bottom:12%;background:rgba(6,8,18,.56);border:1px solid var(--line);padding:16px 26px;
+    backdrop-filter:blur(4px);min-width:min(340px,86vw)}
+  #descend .ph{font-family:var(--disp);font-size:19px;letter-spacing:.2em;margin-bottom:10px}
+  #descend .st{font-family:var(--mono);font-size:11.5px;color:var(--star-dim);letter-spacing:.1em;line-height:2}
+  #descend .st b{color:#fff}
+
+  /* ── 発見トースト ──────────────────────── */
+  #toasts{position:absolute;right:15px;top:calc(76px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;align-items:flex-end;
+    pointer-events:none;max-width:min(330px,72vw)}
+  .toast{background:linear-gradient(120deg,rgba(233,224,201,.96),rgba(214,201,168,.94));color:var(--sepia);
+    padding:10px 14px;border-left:3px solid var(--ember);animation:slideIn .38s ease both;box-shadow:0 8px 26px rgba(0,0,0,.45)}
+  .toast .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;opacity:.7}
+  .toast .n{font-family:var(--disp);font-size:15px;font-weight:700;margin:2px 0 3px}
+  .toast .d{font-size:11.5px;line-height:1.7;opacity:.85}
+  .toast.dim{background:rgba(6,8,18,.82);color:var(--star);border-left-color:var(--amber)}
+  @keyframes slideIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+
+  /* ── 航海日誌 ──────────────────────────── */
+  #log{background:rgba(3,5,12,.82);backdrop-filter:blur(7px);overflow:auto}
+  #log .sheet{margin:auto;width:min(980px,100%);background:
+      linear-gradient(180deg,#efe7d2,#e2d7ba);color:var(--sepia);
+      box-shadow:0 24px 70px rgba(0,0,0,.6);position:relative}
+  #log .sheet::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,transparent 0 27px,rgba(74,59,40,.055) 27px 28px)}
+  #log .lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;
+    padding:22px 26px 14px;border-bottom:1.5px solid rgba(74,59,40,.28)}
+  #log h2{font-family:var(--disp);font-size:26px;margin:2px 0 0;letter-spacing:.2em;font-weight:700}
+  #log .lhead .k{font-family:var(--mono);font-size:10px;letter-spacing:.26em;color:rgba(74,59,40,.65)}
+  #log .total{text-align:right;font-family:var(--mono);font-size:11px;color:rgba(74,59,40,.7);letter-spacing:.1em}
+  #log .total b{display:block;font-size:30px;color:var(--ember);font-weight:500;line-height:1.1}
+  #log .body{padding:18px 26px 28px;position:relative;z-index:1}
+  .entries{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:16px}
+  .entry{border-top:1.5px solid rgba(74,59,40,.3);padding-top:11px}
+  .entry .eh{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .entry h4{font-family:var(--disp);font-size:16.5px;margin:0;letter-spacing:.1em;font-weight:700}
+  .entry .st{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:rgba(74,59,40,.6)}
+  .entry ul{list-style:none;margin:9px 0 0;padding:0;font-size:12px;line-height:1.75}
+  .entry li{display:flex;gap:7px;padding:2px 0}
+  .entry li .mk{font-family:var(--mono);color:var(--ember);flex:0 0 auto}
+  .entry li.un{color:rgba(74,59,40,.42)}
+  .entry li.un .mk{color:rgba(74,59,40,.32)}
+  .entry .none{font-size:11.5px;color:rgba(74,59,40,.5);margin-top:8px;font-style:italic}
+  .shots{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px;padding-top:14px;border-top:1.5px solid rgba(74,59,40,.3)}
+  .shots img{width:132px;aspect-ratio:16/9;object-fit:cover;border:3px solid #f6f0e0;box-shadow:0 3px 10px rgba(0,0,0,.28)}
+  .shotwrap{position:relative}
+  .shotwrap span{position:absolute;left:3px;right:3px;bottom:3px;font-family:var(--mono);font-size:8.5px;
+    background:rgba(0,0,0,.55);color:#fff;padding:2px 4px;letter-spacing:.08em}
+  #log .close{position:absolute;top:14px;right:16px}
+  #log .close .btn{border-color:rgba(74,59,40,.4);color:var(--sepia);background:rgba(255,255,255,.35)}
+  #log .close .btn:hover{background:rgba(200,80,60,.16);border-color:var(--ember)}
+
+  #pauseDlg{
+    border:1px solid var(--line); background:var(--ink-2); color:var(--star);
+    padding:22px 20px; max-width:320px; width:calc(100% - 40px);
+  }
+  #pauseDlg::backdrop{background:rgba(6,8,18,.78)}
+  #pauseDlg h2{margin:0 0 14px; text-align:center; font-family:var(--disp); letter-spacing:.18em; color:#f3ead6}
+  #pauseDlg .col{display:flex; flex-direction:column; gap:10px}
+  #pauseDlg .btn{width:100%; text-align:center; min-height:48px}
+
+  #loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+    background:var(--ink);z-index:40}
+  #loading[hidden]{display:none!important}
+  #loading .t{font-family:var(--disp);font-size:18px;letter-spacing:.3em;color:#f3ead6}
+  #loading .s{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--star-dim)}
+  #loading .orb{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);
+    border-top-color:var(--amber);animation:spin 1.5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  @media (max-width:640px){
+    #detail{grid-template-columns:1fr;gap:12px;padding:14px 15px}
+    #detail h3{font-size:20px}
+    #hint{display:none}
+    .entries{grid-template-columns:1fr}
+    #log .sheet{width:100%}
+    .shots img{width:104px}
+  }
+</style>
+</head>
+<body>
+<div id="game-shell">
+  <footer id="control-deck" class="fc-control-deck" aria-label="操作盤">
+    <div class="fc-deck-left">
+      <div class="fc-dpad-wrap" id="fc-dpad-wrap" aria-label="十字キー">
+        <div class="fc-dpad" id="fc-dpad" data-up="0" data-down="0" data-left="0" data-right="0">
+          <div class="fc-dpad-v"></div>
+          <div class="fc-dpad-h"></div>
+          <div class="fc-dpad-c"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fc-deck-center">
+      <button type="button" class="fc-sysbtn" id="fc-btn-select" aria-label="加速">SELECT</button>
+      <button type="button" class="fc-sysbtn" id="fc-btn-start" aria-label="一時停止">START</button>
+    </div>
+    <div class="fc-deck-right">
+      <div class="fc-ab" aria-label="A B ボタン">
+        <button type="button" class="fc-abbtn fc-abbtn-b" id="fc-btn-b" aria-label="撮影"><i>B</i></button>
+        <button type="button" class="fc-abbtn fc-abbtn-a" id="fc-btn-a" aria-label="記録"><i>A</i></button>
+      </div>
+    </div>
+  </footer>
+  <div id="game-stage">
+    <div id="screen-wrap">
+      <div id="star-stack" aria-hidden="true">
+        <canvas id="star-far" width="640" height="360"></canvas>
+        <canvas id="star-mid" width="640" height="360"></canvas>
+        <canvas id="star-near" width="640" height="360"></canvas>
+      </div>
+<div id="game">
+  <div id="loading"><div class="orb"></div><div class="t">星めぐり航海日誌</div><div class="s" id="loadMsg">機関始動…</div></div>
+
+  <!-- タイトル -->
+  <div class="layer pad" id="title" hidden>
+    <div class="inner">
+      <div class="eyebrow">A VOYAGE LOG OF THE NINE LIGHTS</div>
+      <h1>星めぐり航海日誌</h1>
+      <div class="rule" style="margin:0 auto;width:120px;background:linear-gradient(90deg,transparent,var(--amber),transparent)"></div>
+      <p class="sub">地球の宇宙港から船を出し、光の順に星をめぐる。<br>
+        急ぐ旅ではない。着いて、降りて、見て、書きとめる。<br>
+        日誌が埋まるころ、太陽系はもう他人の場所ではなくなっている。</p>
+      <div class="acts">
+        <button class="btn primary" id="btnStart">出港する</button>
+        <button class="btn" id="btnLog0">航海日誌</button>
+      </div>
+      <div class="ver">十字 ─ 移動 ・ A 記録/着陸 ・ B 撮影 ・ SELECT 加速 ・ START ポーズ</div>
+    </div>
+  </div>
+
+  <!-- 星図 -->
+  <div class="layer pad" id="map" hidden>
+    <div class="head">
+      <div><div class="eyebrow">STAR CHART ─ 星図</div><h2>行き先を選ぶ</h2></div>
+      <div class="prog">航海達成率 <b id="mapPct">0%</b></div>
+    </div>
+    <div class="rail"><div class="rail-in" id="rail"></div></div>
+    <div id="detail">
+      <div>
+        <div class="kana" id="dKana">EARTH</div>
+        <h3 id="dName">地球</h3>
+        <p class="mission" id="dMission"></p>
+        <div class="go">
+          <button class="btn primary" id="btnGo">出発</button>
+          <button class="btn ghost" id="btnLog1">日誌を見る</button>
+          <span class="stamp off" id="dStamp">未到達</span>
+        </div>
+      </div>
+      <dl id="dStats"></dl>
+    </div>
+  </div>
+
+  <!-- 航行・周回HUD -->
+  <div class="layer" id="hud" hidden>
+    <div class="corner c1"></div><div class="corner c2"></div><div class="corner c3"></div><div class="corner c4"></div>
+    <div class="hudbox" id="navBox">
+      <div class="t" id="navTitle">NAVIGATION</div>
+      <div class="row"><span id="nl1">目標</span><span id="nv1">—</span></div>
+      <div class="row"><span id="nl2">距離</span><span id="nv2">—</span></div>
+      <div class="row"><span id="nl3">速度</span><span id="nv3">—</span></div>
+      <div id="bar"><i id="barI"></i></div>
+    </div>
+    <div id="topRight">
+      <button class="btn ghost" id="btnLog2">日誌</button>
+      <button class="btn ghost" id="btnMap2">星図</button>
+    </div>
+    <svg id="reticle" viewBox="0 0 78 78" fill="none" stroke="rgba(232,163,61,.55)">
+      <circle cx="39" cy="39" r="27" stroke-dasharray="3 7"/>
+      <path d="M39 4v12M39 62v12M4 39h12M62 39h12" stroke="rgba(232,163,61,.8)"/>
+      <circle cx="39" cy="39" r="1.6" fill="rgba(232,163,61,.9)" stroke="none"/>
+    </svg>
+    <div id="tgtLabel" hidden></div>
+    <div id="action"></div>
+    <div id="hint"></div>
+  </div>
+
+  <!-- 着陸シーケンス -->
+  <div class="layer pad" id="descend" hidden>
+    <div class="card">
+      <div class="ph" id="dsPhase">降下開始</div>
+      <div class="st" id="dsStat"></div>
+    </div>
+  </div>
+
+  <!-- 日誌 -->
+  <div class="layer pad" id="log" hidden>
+    <div class="sheet">
+      <div class="close"><button class="btn" id="btnLogX">閉じる</button></div>
+      <div class="lhead">
+        <div><div class="k">VOYAGE LOG</div><h2>航海日誌</h2></div>
+        <div class="total">達成率<b id="logPct">0%</b><span id="logSub"></span></div>
+      </div>
+      <div class="body"><div class="entries" id="logEntries"></div><div class="shots" id="logShots" hidden></div></div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="flash"></div>
+</div>
+    </div>
+  </div>
+</div>
+<dialog id="pauseDlg" aria-labelledby="pauseTitle">
+  <h2 id="pauseTitle">一時停止</h2>
+  <div class="col">
+    <button type="button" class="btn primary" id="btnResume">再開</button>
+    <button type="button" class="btn" id="btnMuteDlg">音の切り替え</button>
+    <button type="button" class="btn" id="btnQuitMap">星図へ</button>
+  </div>
+</dialog>
+<script src="fc-ios-controller.js"></script>
+<script src="three.min.js"></script>
+<script>
+/* ===========================================================
+   星めぐり航海日誌 — 天体データ
+   =========================================================== */
+const SURF = {
+  port:{ ground:[0x3f4a42,0x55604f], rock:0x4b5348, sky:[0x2b5f9e,0x9dc4e0], fogNear:120, fogFar:520,
+         amb:0.55, sun:1.25, rough:1.4, scale:0.012, craters:0, props:'gantry', star:0.08 },
+  crater:{ ground:[0x8f8a80,0xa9a39a], rock:0x6f6a63, sky:[0x000000,0x000000], fogNear:400, fogFar:900,
+         amb:0.16, sun:1.9, rough:2.6, scale:0.016, craters:34, props:'flag', star:1 },
+  shade:{ ground:[0x8b7f72,0x6d6258], rock:0x5a5049, sky:[0x000000,0x000000], fogNear:380, fogFar:880,
+         amb:0.13, sun:2.5, rough:3.4, scale:0.018, craters:26, props:'base', star:1 },
+  cloud:{ ground:[0xd9b271,0xe8cf9c], rock:0xc79a5c, sky:[0x8a5a1e,0xe0b070], fogNear:60, fogFar:340,
+         amb:0.7, sun:1.0, rough:1.0, scale:0.01, craters:0, props:'platform', star:0 },
+  rocky:{ ground:[0xa4562f, 0xc07a45], rock:0x7d4526, sky:[0x2a1b16,0xc9a184], fogNear:140, fogFar:620,
+         amb:0.4, sun:1.5, rough:4.2, scale:0.013, craters:9, props:'ice', star:0.35 },
+  ice:{ ground:[0xcfe0ea,0xa9c4d6], rock:0x8fb0c4, sky:[0x000000,0x000000], fogNear:340, fogFar:820,
+         amb:0.22, sun:1.05, rough:2.0, scale:0.02, craters:6, props:'shard', star:1 },
+  dune:{ ground:[0xb07038,0x8d5527], rock:0x6f4520, sky:[0x5a3210,0xd89a4e], fogNear:80, fogFar:380,
+         amb:0.55, sun:0.7, rough:5.0, scale:0.009, craters:0, props:'lake', star:0 }
+};
+
+/* finds: k=識別 n=名前 t=日誌本文 sky=空を見上げて撮る対象 */
+const BODIES = [
+  { id:'sun', name:'太陽', kana:'SOL', type:'star', color:0xffcf6b, rad:260, tex:'star',
+    au:'0.0 AU', cruise:3000, grav:'─',
+    mission:'安全距離の三万kmから太陽面を観測する。近づきすぎない。それがこの航海で最初に覚える作法だ。',
+    obs:[ {k:'spot',n:'黒点群',t:'周囲より千八百度低い。それでも地球のどんな炎より明るい。'},
+          {k:'prom',n:'プロミネンス',t:'磁力線に沿って持ち上がった紅炎。地球十個分の高さで静止して見えた。'},
+          {k:'gran',n:'粒状斑',t:'表面を覆う対流の粒。ひと粒が九州ほどの大きさで、数分で入れ替わる。'},
+          {k:'coro',n:'コロナ',t:'表面より高温という説明を、目で見ても納得はできない。'} ] },
+
+  { id:'earth', name:'地球', kana:'TERRA', type:'port', color:0x2f6fb5, tex:'earth', rad:90,
+    au:'1.0 AU', cruise:900, grav:'1.00 G', surf:'port', moonSky:null,
+    mission:'第七宇宙港。ここから出て、ここに帰る。離れる前に、青い星を一度だけ振り返っておくこと。',
+    finds:[ {k:'gantry',n:'発射整備塔',t:'三十八回の出港を支えた塔。塗装の剥がれが年輪のように層をつくっている。'},
+            {k:'capsule',n:'帰還カプセル',t:'退役した三号機。黒く焼けた底面に、大気の厚みが記録されている。'},
+            {k:'dish',n:'追跡アンテナ',t:'海王星の船の声を、二十二時間遅れで受け取り続けている皿。'},
+            {k:'mono',n:'出港記念碑',t:'帰らなかった船の名が刻まれている。名前の数だけ、間隔が広い。'},
+            {k:'wind',n:'海風の観測ポール',t:'塩を含んだ風。この匂いを覚えておくと、あとで効いてくる。'} ],
+    obs:[ {k:'blue',n:'青い地球',t:'振り返る。海が光を返し、雲が白い筋を引いている。ここが出発点だった。'},
+          {k:'term',n:'昼夜の境界線',t:'夜の側に都市の灯。人の営みが地形図のように光っていた。'} ] },
+
+  { id:'moon', name:'月', kana:'LUNA', type:'land', color:0xb9b4ab, tex:'rock', rad:70,
+    au:'0.0026 AU', cruise:1300, grav:'0.17 G', surf:'crater', moonSky:'earth',
+    mission:'低重力を身体で覚える。一歩が四歩ぶん伸びる感覚に慣れたら、クレーターの底まで降りてみよう。',
+    finds:[ {k:'foot',n:'レゴリスの足跡',t:'風がないので消えない。数百万年後もこの形で残る。'},
+            {k:'peak',n:'中央丘',t:'衝突の反動で跳ね返った地面が、そのまま固まって山になっている。'},
+            {k:'shade',n:'永久影の氷',t:'太陽が一度も差したことのない窪み。白い霜がわずかに光った。'},
+            {k:'glass',n:'隕石ガラスの玉',t:'衝突熱で溶けた土が、宙で球になって落ちたもの。指先で転がる。'},
+            {k:'leg',n:'古い着陸脚',t:'半世紀前の無人機。脚の一本が折れたまま、正確に東を向いている。'} ],
+    obs:[ {k:'rise',n:'地球の出',t:'月の地平から青が昇る。月から見る地球は、空のほぼ同じ位置に留まり続ける。'},
+          {k:'far',n:'月の裏側',t:'地球からは永遠に見えない面。クレーターの密度が明らかに濃い。'} ] },
+
+  { id:'mercury', name:'水星', kana:'MERCURIUS', type:'land', color:0x9a8e83, tex:'rock', rad:64,
+    au:'0.39 AU', cruise:2400, grav:'0.38 G', surf:'shade', moonSky:'sunbig',
+    mission:'昼側は四百度、夜側は零下百七十度。極の日陰基地を目指して、影の側を歩く。',
+    finds:[ {k:'dome',n:'日陰基地ドーム',t:'クレーターの北壁の影に建っている。太陽が当たらないことが立地条件。'},
+            {k:'ridge',n:'リンクルリッジ',t:'星が冷えて縮んだときのしわ。高さ二キロの崖が数百キロ続く。'},
+            {k:'ice',n:'極の氷',t:'太陽に最も近い星に、氷がある。影だけがそれを守っている。'},
+            {k:'glassp',n:'ガラス質の平原',t:'溶岩が薄く広がって固まった面。踏むと硬質な音が返る。'} ],
+    obs:[ {k:'big',n:'巨大な太陽',t:'地球から見る三倍の大きさ。近いというのはこういうことだと分かる。'} ] },
+
+  { id:'venus', name:'金星', kana:'VENUS', type:'land', color:0xe3c48a, tex:'cloud', rad:86,
+    au:'0.72 AU', cruise:1800, grav:'0.90 G', surf:'cloud', moonSky:null,
+    mission:'地表は九十気圧。降りない。高度五十五キロの雲上観測基地に係留して、大気だけを調べる。',
+    finds:[ {k:'moor',n:'係留塔',t:'浮遊基地を風下に流されないよう繋いでいる。基地ごと秒速百メートルで動いている。'},
+            {k:'drop',n:'硫酸の雲粒',t:'採取管の中で薄く濁った。雨は地表に届く前に蒸発する。'},
+            {k:'rot',n:'風速計',t:'大気が星本体より六十倍速く回っている。スーパーローテーション。'},
+            {k:'light',n:'下層の雷光',t:'足元の雲が内側から白く光る。音は届かない。'} ],
+    obs:[ {k:'veil',n:'途切れない雲',t:'全球が同じ色。地表を一度も見せないまま、船の下を流れていく。'} ] },
+
+  { id:'mars', name:'火星', kana:'MARS', type:'land', color:0xc1552d, tex:'rock', rad:76,
+    au:'1.52 AU', cruise:2800, grav:'0.38 G', surf:'rocky', moonSky:'phobos', rover:true,
+    mission:'探査車で走る。砂丘のあいだに、地下から顔を出した氷の層があるらしい。',
+    finds:[ {k:'ice',n:'氷のサンプル',t:'赤い地面の裂け目に白い層。掘るまでもなく、水はここにあった。'},
+            {k:'dune',n:'赤鉄鉱の砂丘',t:'風紋の向きが全部そろっている。卓越風は西から。'},
+            {k:'chan',n:'干上がった水路',t:'蛇行の跡。かつて液体が流れていた形を、地形は忘れていない。'},
+            {k:'devil',n:'ダストデビルの痕',t:'塵旋風が表面の砂を剥いだ黒い筋。数キロにわたって走っている。'},
+            {k:'track',n:'先行機の轍',t:'二〇二〇年代の探査車のタイヤ跡。まだ角が立っている。'} ],
+    obs:[ {k:'dusk',n:'青い薄明',t:'火星の夕焼けは青い。塵が赤い光を散らしてしまうから。'},
+          {k:'olym',n:'オリンポス山',t:'高度二万一千メートル。裾野が県境ほどあり、山だと認識するのに時間がかかる。'} ] },
+
+  { id:'jupiter', name:'木星', kana:'IUPPITER', type:'giant', color:0xd8b48a, tex:'band', rad:340,
+    au:'5.2 AU', cruise:4200, grav:'2.53 G',
+    mission:'着陸する地面がない。雲の渦を周回しながら観測し、氷の衛星エウロパに降りる。',
+    obs:[ {k:'grs',n:'大赤斑',t:'三百年以上回り続ける渦。地球がそのまま二つ入る。'},
+          {k:'band',n:'縞と帯',t:'白い帯が上昇流、褐色の縞が下降流。惑星全体が一枚の天気図。'},
+          {k:'aur',n:'極のオーロラ',t:'地球の百倍の明るさ。磁気圏が衛星から剥がした物質で光っている。'},
+          {k:'io',n:'イオの火山',t:'すれ違いに見えた。潮汐で内部が練られ、硫黄の噴煙が三百キロ上がっている。'} ],
+    sat:{ id:'europa', name:'エウロパ', surf:'ice', moonSky:'jupiter', grav:'0.13 G',
+      finds:[ {k:'lin',n:'氷の裂け目（リネア）',t:'赤褐色の筋が全球を走る。下の海の塩が染み出した色だという。'},
+              {k:'tide',n:'潮汐の隆起',t:'木星に引かれて氷殻が三十メートル上下する。立っていると分からない。'},
+              {k:'plume',n:'氷下海のプルーム',t:'裂け目から水蒸気。海はここから二十キロ下にある。'},
+              {k:'jrise',n:'木星の出',t:'空の四分の一が木星。衛星は同じ面をずっと向けているので、位置が動かない。'} ] } },
+
+  { id:'saturn', name:'土星', kana:'SATURNUS', type:'giant', color:0xe2cd9b, tex:'band', rad:320, rings:true,
+    au:'9.6 AU', cruise:5200, grav:'1.07 G',
+    mission:'環に沿って低速で飛ぶ。そのあと、濃い大気を持つ衛星タイタンへ。',
+    obs:[ {k:'cass',n:'カッシーニの間隙',t:'環の中の四千八百キロの隙間。近づくと、環は無数の氷の粒の群れだと分かる。'},
+          {k:'hex',n:'北極の六角形',t:'直径三万キロの正六角形の渦。なぜ六角なのか、まだ誰も説明できていない。'},
+          {k:'shadow',n:'環の影',t:'雲の上に細い線が落ちている。影にも隙間の模様が写っている。'},
+          {k:'thin',n:'環の厚み',t:'真横から見るとほとんど消える。幅二十万キロ、厚みは十数メートル。'} ],
+    sat:{ id:'titan', name:'タイタン', surf:'dune', moonSky:'saturn', grav:'0.14 G',
+      finds:[ {k:'lake',n:'メタンの湖',t:'液体メタンの湖面。風で立つ波が、水よりゆっくりしている。'},
+              {k:'idune',n:'氷の砂丘',t:'砂に見えるが有機物の粒。赤道に沿って数百キロの縦列をつくる。'},
+              {k:'haze',n:'橙色の濃霧',t:'窒素とメタンの霞。太陽は方向の分かる明るい斑点にしかならない。'},
+              {k:'ring',n:'見上げた環',t:'霞の切れ目から土星の環。この星の名前を持つ者として、記録しておく。'} ] } },
+
+  { id:'uranus', name:'天王星', kana:'URANUS', type:'giant', color:0x9fd8dc, tex:'band', rad:230, rings:true,
+    au:'19.2 AU', cruise:6200, grav:'0.89 G',
+    mission:'横倒しの星。遠方観測拠点に立ち寄り、縦に立った環を確かめる。',
+    obs:[ {k:'tilt',n:'横倒しの自転軸',t:'九十八度傾いている。自転軸がほぼ公転面上にあり、季節が四十二年続く。'},
+          {k:'vring',n:'縦の環',t:'環が縦に立って見える。星ごと倒れているので、環も一緒に倒れている。'},
+          {k:'meth',n:'メタンの青緑',t:'赤い光をメタンが吸う。残った色だけが返ってくる。'} ],
+    sat:{ id:'miranda', name:'ミランダ観測拠点', surf:'ice', moonSky:'uranus', grav:'0.008 G',
+      finds:[ {k:'verona',n:'ヴェローナ断崖',t:'高さ二十キロの崖。落ちても着底まで十分かかる。'},
+              {k:'patch',n:'継ぎ接ぎの地形',t:'一度砕けて組み直したような表面。境界の角度がどこも合っていない。'},
+              {k:'hut',n:'無人観測拠点',t:'三年に一度、人が点検に来る。ノートに前任者の走り書きが残っていた。'} ] } },
+
+  { id:'neptune', name:'海王星', kana:'NEPTUNUS', type:'giant', color:0x3f62c8, tex:'band', rad:225,
+    au:'30.1 AU', cruise:7000, grav:'1.14 G',
+    mission:'太陽系最果ての観測拠点。太陽はもう、いちばん明るい星でしかない。',
+    obs:[ {k:'dark',n:'大暗斑',t:'高気圧の渦。数年で消え、別の場所に現れる。'},
+          {k:'wind',n:'秒速六百メートルの風',t:'太陽系で最速。熱源がほとんどないのに、なぜこれほど動くのか。'},
+          {k:'faint',n:'遠い太陽',t:'明るさは地球の九百分の一。それでも他のどの星より明るい。'} ],
+    sat:{ id:'triton', name:'トリトン観測拠点', surf:'ice', moonSky:'neptune', grav:'0.08 G',
+      finds:[ {k:'cryo',n:'窒素の氷火山',t:'零下二百度の噴煙が八キロ上がり、風下に黒い筋を引いている。'},
+              {k:'melon',n:'メロンの皮の地形',t:'割れ目が格子に走る。理由は不明。'},
+              {k:'retro',n:'逆行軌道',t:'この衛星だけが親星と逆に回る。捕らえられた天体だという証拠。'} ] } }
+];
+
+const BY_ID = {};
+BODIES.forEach(b => { BY_ID[b.id] = b; if (b.sat) BY_ID[b.sat.id] = b.sat; });
+
+/* 到達順の目安（星図の並び＝太陽からの距離順） */
+const ROUTE = ['sun','mercury','venus','earth','moon','mars','jupiter','saturn','uranus','neptune'];
+
+/* 各天体で集められる記録の総数 */
+function totalSlots(b){
+  let n = 1; // 到達
+  if (b.obs) n += b.obs.length;
+  if (b.finds) n += b.finds.length;
+  if (b.sat)  n += b.sat.finds.length + 1; // 衛星着陸
+  if (b.surf) n += 1; // 着陸
+  return n;
+}
+/* ===========================================================
+   基盤 — 保存・音・乱数地形・素材生成
+   =========================================================== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+const lerp = (a,b,t) => a+(b-a)*t;
+const TAU = Math.PI*2;
+
+/* ── 記録の保存（端末内・失敗しても遊べる） ───────────── */
+const SAVE_KEY = 'hoshimeguri.v1';
+let SAVE = { rec:{}, photos:[] };
+function loadSave(){
+  try{ const s = localStorage.getItem(SAVE_KEY); if(s){ const o = JSON.parse(s);
+    if(o && o.rec) SAVE = { rec:o.rec||{}, photos:Array.isArray(o.photos)?o.photos:[] }; } }catch(e){}
+}
+function writeSave(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){}
+}
+const MUTE_KEY = 'tg.250.mute';
+function loadMute(){
+  try{ return localStorage.getItem(MUTE_KEY)==='1'; }catch(e){ return false; }
+}
+function storeMute(muted){
+  try{ localStorage.setItem(MUTE_KEY, muted?'1':'0'); }catch(e){}
+}
+const has = k => !!SAVE.rec[k];
+function mark(k){ if(SAVE.rec[k]) return false; SAVE.rec[k]=1; writeSave(); return true; }
+
+/* ── 音（ひとつのゲイン下にまとめる／Mで切替） ─────────── */
+const Audio2 = {
+  on:true, ctx:null, master:null, pad:null, padGain:null, padF:0,
+  init(){
+    if(this.ctx) return;
+    try{
+      const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain(); this.master.gain.value = 0.5; this.master.connect(this.ctx.destination);
+      const g = this.ctx.createGain(); g.gain.value = 0; g.connect(this.master);
+      const f = this.ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=420; f.connect(g);
+      const o1 = this.ctx.createOscillator(); o1.type='sine'; o1.frequency.value=72;
+      const o2 = this.ctx.createOscillator(); o2.type='triangle'; o2.frequency.value=108.4;
+      const o3 = this.ctx.createOscillator(); o3.type='sine'; o3.frequency.value=145.3;
+      [o1,o2,o3].forEach(o=>{o.connect(f);o.start();});
+      this.pad = [o1,o2,o3]; this.padGain = g;
+    }catch(e){}
+  },
+  ambience(base, vol){
+    if(!this.ctx||!this.pad) return; this.padF = base;
+    const t = this.ctx.currentTime;
+    this.pad[0].frequency.linearRampToValueAtTime(base, t+1.4);
+    this.pad[1].frequency.linearRampToValueAtTime(base*1.505, t+1.4);
+    this.pad[2].frequency.linearRampToValueAtTime(base*2.02, t+1.4);
+    this.padGain.gain.linearRampToValueAtTime(this.on?vol:0, t+1.4);
+  },
+  blip(f, dur, type){
+    if(!this.ctx||!this.on) return;
+    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type||'sine'; o.frequency.value=f; g.gain.value=0;
+    g.gain.linearRampToValueAtTime(0.16, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0008, t+(dur||0.3));
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+(dur||0.3)+0.05);
+  },
+  chord(list){ if(!this.on) return; list.forEach((f,i)=>setTimeout(()=>this.blip(f,0.55,'triangle'), i*110)); },
+  noise(dur, vol){
+    if(!this.ctx||!this.on) return;
+    const n = Math.floor(this.ctx.sampleRate*dur), buf = this.ctx.createBuffer(1,n,this.ctx.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = (Math.random()*2-1)*(1-i/n);
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=900; f.Q.value=0.7;
+    const g = this.ctx.createGain(); g.gain.value = vol||0.12;
+    s.connect(f); f.connect(g); g.connect(this.master); s.start();
+  },
+  toggle(){ this.on=!this.on; if(this.padGain&&this.ctx) this.padGain.gain.linearRampToValueAtTime(this.on?0.06:0, this.ctx.currentTime+0.4); storeMute(!this.on); syncMuteBtn(); return this.on; },
+  setMuted(muted){ if(this.on===!muted){ storeMute(muted); syncMuteBtn(); return this.on; } return this.toggle(); }
+};
+
+/* ── 決定論的ノイズ ──────────────────────────────── */
+function hash2(x,y,s){ const n = Math.sin(x*127.1+y*311.7+s*74.7)*43758.5453123; return n-Math.floor(n); }
+function vnoise(x,y,s){
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  const a=hash2(xi,yi,s), b=hash2(xi+1,yi,s), c=hash2(xi,yi+1,s), d=hash2(xi+1,yi+1,s);
+  return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v;
+}
+function fbm(x,y,s,oct){
+  let sum=0, amp=0.5, f=1, norm=0;
+  for(let i=0;i<(oct||4);i++){ sum+=amp*vnoise(x*f,y*f,s+i*13); norm+=amp; f*=2.03; amp*=0.5; }
+  return sum/norm;
+}
+
+/* ── 地形の高さ関数（メッシュと足元で同じ式を使う） ───── */
+let TER = null; // {cfg, seed, craters:[], lake:null}
+function terrainInit(cfgName, seed){
+  const cfg = SURF[cfgName];
+  const craters = [];
+  let rs = seed*9301+49297;
+  const rnd = () => { rs = (rs*9301+49297)%233280; return rs/233280; };
+  for(let i=0;i<cfg.craters;i++){
+    const ang = rnd()*TAU, dist = 18 + rnd()*205;
+    craters.push({ x:Math.cos(ang)*dist, z:Math.sin(ang)*dist, r:7+rnd()*30, d:2.2+rnd()*7 });
+  }
+  TER = { name:cfgName, cfg, seed, craters };
+}
+function heightAt(x,z){
+  if(!TER) return 0;
+  const c = TER.cfg, s = TER.seed;
+  let h = (fbm(x*c.scale, z*c.scale, s, 4)-0.5)*c.rough*13;
+  h += (fbm(x*c.scale*4.1, z*c.scale*4.1, s+31, 3)-0.5)*c.rough*2.4;
+  if(TER.name==='dune'){
+    h += Math.sin(x*0.055 + fbm(x*0.004,z*0.004,s,2)*7)*3.4 + Math.sin(z*0.02)*1.2;
+  }
+  if(TER.name==='cloud' || TER.name==='port'){ h *= 0.34; }
+  for(let i=0;i<TER.craters.length;i++){
+    const cr = TER.craters[i], dx = x-cr.x, dz = z-cr.z, d = Math.sqrt(dx*dx+dz*dz);
+    if(d < cr.r*1.35){
+      if(d < cr.r){ const t = d/cr.r; h -= cr.d*(1-t*t)*0.95; h += cr.d*0.3*Math.pow(t,6); }
+      else { const t = (d-cr.r)/(cr.r*0.35); h += cr.d*0.3*(1-t)*(1-t); }
+    }
+  }
+  // 中央の着陸地点は平らにしておく
+  const dc = Math.sqrt(x*x+z*z);
+  if(dc < 26) h = lerp(h*0.12, h, clamp((dc-9)/17,0,1));
+  return h;
+}
+
+/* ── 素材：惑星テクスチャ ────────────────────────── */
+const TEXCACHE = {};
+function planetTexture(kind, hex, seed){
+  const ck = kind+'|'+hex+'|'+seed;
+  if(TEXCACHE[ck]) return TEXCACHE[ck];
+  const W=512, H=256, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g = cv.getContext('2d');
+  const base = new THREE.Color(hex);
+  const col = (l,sat)=>{ const c=base.clone(); const hsl={}; c.getHSL(hsl);
+    c.setHSL(hsl.h, clamp(hsl.s*(sat===undefined?1:sat),0,1), clamp(hsl.l*l,0.02,0.97)); return '#'+c.getHexString(); };
+  g.fillStyle = col(1); g.fillRect(0,0,W,H);
+  if(kind==='band'||kind==='cloud'){
+    for(let y=0;y<H;y++){
+      const t = y/H;
+      const n = fbm(t*11, seed*3.3, seed, 4);
+      const l = 0.78 + n*0.5 + Math.sin(t*Math.PI*9+seed)*0.09;
+      g.fillStyle = col(l, 0.85+n*0.4); g.fillRect(0,y,W,1);
+    }
+    for(let i=0;i<220;i++){ // 渦の粒
+      const y=Math.random()*H, x=Math.random()*W, w=6+Math.random()*52, h=1.4+Math.random()*4.5;
+      g.globalAlpha=0.13+Math.random()*0.2; g.fillStyle = col(Math.random()<0.5?1.3:0.72);
+      g.beginPath(); g.ellipse(x,y,w,h,0,0,TAU); g.fill();
+    }
+    g.globalAlpha=1;
+    if(kind==='band'&&seed<2){ // 大赤斑
+      g.fillStyle='rgba(196,96,64,.72)'; g.beginPath(); g.ellipse(150,168,44,17,0,0,TAU); g.fill();
+      g.fillStyle='rgba(224,150,110,.5)'; g.beginPath(); g.ellipse(150,168,30,11,0,0,TAU); g.fill();
+    }
+  } else if(kind==='earth'){
+    g.fillStyle='#16406f'; g.fillRect(0,0,W,H);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      const n = fbm(x*0.028, y*0.034, 3, 5);
+      if(n>0.545){ const h2=(n-0.545)*5;
+        g.fillStyle = h2>0.55? '#8a9a6a' : (h2>0.28? '#4e7a43':'#3f6b3d');
+        g.fillRect(x,y,1,1); }
+      else if(n>0.52){ g.fillStyle='#2a6a86'; g.fillRect(x,y,1,1); }
+    }
+    g.fillStyle='#eef4f7';
+    g.fillRect(0,0,W,7); g.fillRect(0,H-9,W,9);
+    for(let i=0;i<170;i++){ const x=Math.random()*W, y=Math.random()*H, r=5+Math.random()*26;
+      g.globalAlpha=0.1+Math.random()*0.32; g.beginPath(); g.ellipse(x,y,r,r*0.42,Math.random(),0,TAU); g.fill(); }
+    g.globalAlpha=1;
+  } else if(kind==='star'){
+    for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){
+      const n = fbm(x*0.09,y*0.09,7,3);
+      g.fillStyle = `rgb(255,${Math.floor(190+n*62)},${Math.floor(70+n*95)})`; g.fillRect(x,y,2,2);
+    }
+    for(let i=0;i<16;i++){ const x=Math.random()*W,y=40+Math.random()*(H-80);
+      g.fillStyle='rgba(150,72,20,.6)'; g.beginPath(); g.ellipse(x,y,5+Math.random()*13,4+Math.random()*8,0,0,TAU); g.fill(); }
+  } else { /* rock */
+    for(let y=0;y<H;y+=1) for(let x=0;x<W;x+=1){
+      const n = fbm(x*0.05,y*0.05,seed,5)*0.72 + fbm(x*0.2,y*0.2,seed+5,3)*0.28;
+      g.fillStyle = col(0.62+n*0.85, 0.9); g.fillRect(x,y,1,1);
+    }
+    for(let i=0;i<90;i++){ const x=Math.random()*W,y=Math.random()*H,r=2+Math.random()*13;
+      g.globalAlpha=0.5; g.strokeStyle=col(1.5); g.lineWidth=1.3;
+      g.beginPath(); g.arc(x,y,r,0,TAU); g.stroke();
+      g.globalAlpha=0.3; g.fillStyle=col(0.7); g.beginPath(); g.arc(x,y,r*0.9,0,TAU); g.fill(); }
+    g.globalAlpha=1;
+  }
+  const tx = new THREE.CanvasTexture(cv); tx.anisotropy = 4;
+  TEXCACHE[ck] = tx; return tx;
+}
+
+function glowSprite(hex, size, power){
+  const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d');
+  const c = new THREE.Color(hex), r=Math.floor(c.r*255), gg=Math.floor(c.g*255), b=Math.floor(c.b*255);
+  const grd = g.createRadialGradient(64,64,0,64,64,64);
+  grd.addColorStop(0,`rgba(255,255,255,${power||0.95})`);
+  grd.addColorStop(0.22,`rgba(${r},${gg},${b},${(power||0.9)*0.8})`);
+  grd.addColorStop(0.55,`rgba(${r},${gg},${b},.18)`);
+  grd.addColorStop(1,`rgba(${r},${gg},${b},0)`);
+  g.fillStyle=grd; g.fillRect(0,0,128,128);
+  const t=new THREE.CanvasTexture(cv);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+  s.scale.set(size,size,1); return s;
+}
+
+function ringTexture(hex){
+  const W=256,cv=document.createElement('canvas'); cv.width=W; cv.height=8; const g=cv.getContext('2d');
+  const base=new THREE.Color(hex);
+  for(let x=0;x<W;x++){
+    const t=x/W;
+    let a = 0.72;
+    if(t<0.12) a=0; else if(t>0.97) a=0;
+    a *= 0.45+fbm(t*26,0,4,3)*0.9;
+    if(t>0.62&&t<0.665) a*=0.06;            // カッシーニの間隙
+    if(t>0.38&&t<0.40) a*=0.3;
+    const c=base.clone(); c.multiplyScalar(0.7+fbm(t*40,3,9,2)*0.7);
+    g.fillStyle=`rgba(${Math.floor(c.r*255)},${Math.floor(c.g*255)},${Math.floor(c.b*255)},${clamp(a,0,1)})`;
+    g.fillRect(x,0,1,8);
+  }
+  const tx=new THREE.CanvasTexture(cv); tx.wrapS=tx.wrapT=THREE.ClampToEdgeWrapping; return tx;
+}
+function makeRings(inner, outer, hex){
+  const geo = new THREE.RingGeometry(inner, outer, 128, 1);
+  const pos = geo.attributes.position, uv = geo.attributes.uv, v = new THREE.Vector3();
+  for(let i=0;i<pos.count;i++){
+    v.fromBufferAttribute(pos,i);
+    const t = (v.length()-inner)/(outer-inner);
+    uv.setXY(i, t, (i%2)?0:1);
+  }
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    map:ringTexture(hex), transparent:true, side:THREE.DoubleSide, depthWrite:false, opacity:0.95 }));
+  m.rotation.x = Math.PI/2; return m;
+}
+
+function paintStarCanvas(cv, layer){
+  const W=cv.width, H=cv.height, g=cv.getContext('2d');
+  g.clearRect(0,0,W,H);
+  const spec = [
+    { n:900, r:[0.4,1.1], a:[0.28,0.7], warm:0.12, glow:false, plus:0 },
+    { n:220, r:[0.8,2.1], a:[0.45,0.92], warm:0.22, glow:false, plus:0 },
+    { n:48,  r:[1.5,3.4], a:[0.7,1], warm:0.34, glow:true, plus:10 }
+  ][layer];
+  let s = 1 + layer*97;
+  const rnd = () => { s = (s*1664525+1013904223)>>>0; return s/4294967296; };
+  for(let i=0;i<spec.n;i++){
+    const x=rnd()*W, y=rnd()*H;
+    const rr = spec.r[0]+rnd()*(spec.r[1]-spec.r[0]);
+    const a = spec.a[0]+rnd()*(spec.a[1]-spec.a[0]);
+    const rgb = rnd()<spec.warm ? '255,214,168' : '214,232,255';
+    if(spec.glow){
+      const R=rr*4, grd=g.createRadialGradient(x,y,0,x,y,R);
+      grd.addColorStop(0,'rgba(255,255,255,'+a+')');
+      grd.addColorStop(0.3,'rgba('+rgb+','+(a*0.65)+')');
+      grd.addColorStop(1,'rgba('+rgb+',0)');
+      g.fillStyle=grd; g.fillRect(x-R,y-R,R*2,R*2);
+    } else {
+      g.fillStyle='rgba('+rgb+','+a+')';
+      g.fillRect(x-rr, y-rr, rr*2, rr*2);
+    }
+  }
+  for(let i=0;i<spec.plus;i++){
+    const x=rnd()*W, y=rnd()*H, len=6+rnd()*10, a=0.55+rnd()*0.4;
+    g.strokeStyle='rgba(255,248,230,'+a+')'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(x-len,y); g.lineTo(x+len,y); g.moveTo(x,y-len); g.lineTo(x,y+len); g.stroke();
+  }
+}
+function ensureStarStack(){
+  if(ensureStarStack.done) return;
+  const ids=['star-far','star-mid','star-near'];
+  ids.forEach((id,i)=>{ const cv=$(id); if(cv) paintStarCanvas(cv,i); });
+  ensureStarStack.done = true;
+}
+function starField(count, radius, scene){
+  ensureStarStack();
+  const el = $('star-stack');
+  if(el){ el.style.visibility='visible'; el.style.opacity='1'; }
+  G.stars = { css:true };
+  return { material: { set opacity(v){ if(el) el.style.opacity = String(v); } } };
+}
+function updStarLayers(dt){
+  if(!camera) return;
+  const el = $('star-stack');
+  if(!el || el.style.visibility==='hidden') return;
+  const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+  const x = e.y*48, y = e.x*32;
+  const far=$('star-far'), mid=$('star-mid'), near=$('star-near');
+  if(far) far.style.transform = 'translate('+(-x*0.32)+'px,'+(y*0.32)+'px)';
+  if(mid) mid.style.transform = 'translate('+(-x*0.68)+'px,'+(y*0.68)+'px)';
+  if(near){
+    near.style.transform = 'translate('+(-x)+'px,'+(y)+'px)';
+    if(!PAUSED) near.style.opacity = String(0.78 + Math.sin(T*2.15)*0.14 + Math.sin(T*5.1)*0.05);
+  }
+}
+
+/* ── 宇宙船 ─────────────────────────────────────── */
+function buildShip(){
+  const g = new THREE.Group();
+  const hullMat = new THREE.MeshStandardMaterial({color:0xd8dce2, metalness:0.65, roughness:0.4, flatShading:true});
+  const darkMat = new THREE.MeshStandardMaterial({color:0x2b3347, metalness:0.5, roughness:0.6, flatShading:true});
+  const amber   = new THREE.MeshBasicMaterial({color:0xffb84d});
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.62,3.1,7), hullMat);
+  body.rotation.x = Math.PI/2; g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.42,1.5,7), hullMat);
+  nose.rotation.x = -Math.PI/2; nose.position.z = 2.3; g.add(nose);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.34,10,8,0,TAU,0,Math.PI/2),
+    new THREE.MeshStandardMaterial({color:0x7ec8f0, metalness:0.3, roughness:0.15, emissive:0x1b3b52}));
+  canopy.position.set(0,0.3,1.2); canopy.scale.set(1,0.8,1.9); g.add(canopy);
+  for(const s of [-1,1]){
+    const w = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.1,0.95), darkMat);
+    w.position.set(s*1.25,-0.05,-0.5); w.rotation.z = s*0.13; g.add(w);
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,1.2,6), hullMat);
+    p.rotation.x=Math.PI/2; p.position.set(s*1.9,-0.02,-0.55); g.add(p);
+    const e = new THREE.Mesh(new THREE.CircleGeometry(0.17,8), amber);
+    e.position.set(s*1.9,-0.02,-1.16); e.rotation.y=Math.PI; g.add(e);
+  }
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.85,0.7), darkMat);
+  tail.position.set(0,0.5,-1.2); g.add(tail);
+  const flame = glowSprite(0xffa532, 2.2, 0.85); flame.position.z=-1.9; g.add(flame);
+  // 機首を -Z に向ける（進行方向の規約に合わせる）
+  const outer = new THREE.Group(); g.rotation.y = Math.PI; outer.add(g);
+  outer.userData.flame = flame;
+  return outer;
+}
+/* ===========================================================
+   エンジン — 描画・入力・待機画面・航行
+   =========================================================== */
+let renderer, camera, scene, clock, MODE='boot', T=0, PAUSED=false;
+let G = {};                       // 現在シーンの状態
+let CUR = null, CURSAT = false;   // 現在の天体 / 衛星側か
+let pendingShot = null;
+
+const K = {};
+const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5 };
+
+function initEngine(){
+  const host = $('screen-wrap');
+  renderer = new THREE.WebGLRenderer({ antialias:false, alpha:true, preserveDrawingBuffer:true, powerPreference:'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5));
+  renderer.setSize(host.clientWidth, host.clientHeight);
+  if('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  host.insertBefore(renderer.domElement, host.firstChild);
+  renderer.setClearColor(0x03050c, 0);
+  camera = new THREE.PerspectiveCamera(58, host.clientWidth/host.clientHeight, 0.6, 90000);
+  clock = new THREE.Clock();
+  window.addEventListener('resize', onResize);
+  bindInput();
+  ensureStarStack();
+  requestAnimationFrame(tick);
+}
+function onResize(){
+  const host=$('screen-wrap'); if(!renderer) return;
+  renderer.setSize(host.clientWidth, host.clientHeight);
+  camera.aspect = host.clientWidth/Math.max(1,host.clientHeight); camera.updateProjectionMatrix();
+}
+
+function syncMuteBtn(){
+  const el = $('btnMuteDlg');
+  if(el) el.textContent = Audio2.on ? '音: オン' : '音: オフ';
+}
+function unlockAudio(){
+  Audio2.init();
+  if(Audio2.ctx && Audio2.ctx.state === 'suspended') Audio2.ctx.resume();
+}
+function setPaused(v){
+  PAUSED = !!v;
+  const dlg = $('pauseDlg');
+  if(!dlg) return;
+  if(PAUSED){ try{ dlg.showModal(); }catch(e){ dlg.setAttribute('open',''); } }
+  else { try{ dlg.close(); }catch(e){ dlg.removeAttribute('open'); } }
+}
+
+/* ── 入力 ─────────────────────────────────────── */
+function bindInput(){
+  installFcIosTouchGuard();
+  initFcIosController({
+    buttons: {
+      'fc-btn-a': ['KeyZ'],
+      'fc-btn-b': ['KeyX'],
+      'fc-btn-select': ['ShiftLeft'],
+      'fc-btn-start': ['Enter']
+    },
+    onChange(keys){
+      K.ArrowUp = !!keys.ArrowUp;
+      K.ArrowDown = !!keys.ArrowDown;
+      K.ArrowLeft = !!keys.ArrowLeft;
+      K.ArrowRight = !!keys.ArrowRight;
+      K.w = !!keys.ArrowUp || !!keys.KeyW;
+      K.s = !!keys.ArrowDown || !!keys.KeyS;
+      K.a = !!keys.ArrowLeft || !!keys.KeyA;
+      K.d = !!keys.ArrowRight || !!keys.KeyD;
+      K.Shift = !!keys.ShiftLeft || !!keys.ShiftRight;
+      IN.tboost = K.Shift ? 1 : 0;
+      if(K.Shift && MODE==='surface') IN.jump = true;
+    }
+  });
+
+  const tap = (id, fn) => {
+    const el = $(id); if(!el) return;
+    el.addEventListener('pointerdown', e => {
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      e.preventDefault();
+      try{ el.setPointerCapture(e.pointerId); }catch(_){}
+      el.classList.add('pressed');
+      if(navigator.vibrate) navigator.vibrate(15);
+      unlockAudio();
+      fn(e);
+    }, {passive:false});
+    const up = () => el.classList.remove('pressed');
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+  };
+  tap('fc-btn-a', () => {
+    if(PAUSED) return;
+    if(MODE==='orbit' && G.landable) act('land');
+    else act('record');
+  });
+  tap('fc-btn-b', () => { if(!PAUSED) act('shoot'); });
+  tap('fc-btn-start', () => setPaused(!PAUSED));
+
+  const down = e => {
+    if(e.metaKey||e.ctrlKey) return;
+    const k = e.key.length===1 ? e.key.toLowerCase() : e.key;
+    K[k]=true;
+    if(k==='e') act('record');
+    if(k==='p') act('shoot');
+    if(k==='l') act('land');
+    if(k==='c') G.rear = !G.rear;
+    if(k==='f') { if(MODE==='cruise'){ G.auto=!G.auto; toast('操縦',G.auto?'自動操縦 入':'自動操縦 切','',true);} }
+    if(k==='m') toast('音響', Audio2.toggle()?'音 入':'音 切','',true);
+    if(k==='j'||k==='Tab'){ e.preventDefault(); toggleLog(); }
+    if(k==='Escape'){
+      if(!$('log').hidden) toggleLog();
+      else if(PAUSED) setPaused(false);
+      else if(MODE!=='attract'&&MODE!=='descend') setPaused(true);
+    }
+    if(k==='Enter'){ e.preventDefault(); setPaused(!PAUSED); }
+    if(k===' ') e.preventDefault();
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(k)>=0) e.preventDefault();
+  };
+  const up = e => { const k = e.key.length===1?e.key.toLowerCase():e.key; K[k]=false; };
+  window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+  window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; });
+  document.addEventListener('pointerdown', unlockAudio, { once:true });
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden && MODE!=='attract' && MODE!=='boot') setPaused(true); });
+
+  const el = renderer.domElement;
+  let drag=false, lx=0, ly=0, pid=null;
+  const start = e => {
+    if(e.target.closest && e.target.closest('#control-deck')) return;
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    drag=true; lx=e.clientX; ly=e.clientY; pid=e.pointerId;
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+  };
+  const move = e => {
+    if(!drag || e.pointerId!==pid) return;
+    IN.look.x += (e.clientX-lx)*0.0042; IN.look.y += (e.clientY-ly)*0.0035;
+    IN.look.y = clamp(IN.look.y, -0.62, 0.95);
+    lx=e.clientX; ly=e.clientY;
+  };
+  const end = e => {
+    if(e && pid!=null && e.pointerId!==pid) return;
+    drag=false; pid=null;
+  };
+  el.addEventListener('pointerdown', start, {passive:false});
+  el.addEventListener('pointermove', move, {passive:true});
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('wheel', e=>{ IN.zoom = clamp(IN.zoom + e.deltaY*0.012, 3.5, 22); }, {passive:true});
+
+  let lastTouchEnd = 0;
+  document.addEventListener('touchmove', e=>{
+    if(e.target.closest('[data-scrollable], #map, #log, .rail')) return;
+    e.preventDefault();
+  }, {passive:false});
+  document.addEventListener('touchend', e=>{
+    const now=Date.now();
+    if(now-lastTouchEnd<=300) e.preventDefault();
+    lastTouchEnd=now;
+  }, {passive:false});
+
+  $('btnResume').addEventListener('click', ()=>setPaused(false));
+  $('btnMuteDlg').addEventListener('click', ()=>{ Audio2.toggle(); toast('音響', Audio2.on?'音 入':'音 切','',true); });
+  $('btnQuitMap').addEventListener('click', ()=>{ setPaused(false); openMap(); });
+}
+function readInput(){
+  const k=K;
+  IN.fwd  = clamp((k.w||k.ArrowUp?1:0) - (k.s||k.ArrowDown?1:0), -1, 1);
+  IN.side = clamp((k.d?1:0) - (k.a?1:0), -1, 1);
+  IN.rot  = (k.ArrowRight?1:0) - (k.ArrowLeft?1:0);
+  IN.turn = clamp(IN.side + IN.rot, -1, 1);
+  IN.boost = (k.Shift||IN.tboost)?1:0;
+  if(k[' ']) IN.jump = true;
+  if(MODE==='surface' && IN.rot) IN.look.x -= IN.rot*0.028;
+}
+
+/* ── 主ループ ─────────────────────────────────── */
+let TICKERR = 0;
+function tick(){
+  const dt = Math.min(clock.getDelta(), 0.05);
+  try{
+  if(!PAUSED){
+    T += dt;
+    readInput();
+    if(scene && camera){
+      if(MODE==='attract') updAttract(dt);
+      else if(MODE==='cruise') updCruise(dt);
+      else if(MODE==='orbit') updOrbit(dt);
+      else if(MODE==='descend') updDescend(dt);
+      else if(MODE==='surface') updSurface(dt);
+    }
+  }
+  if(scene && camera){
+    updStarLayers(dt);
+    renderer.render(scene, camera);
+    if(!PAUSED && pendingShot){ capture(pendingShot); pendingShot=null; }
+  }
+  }catch(err){
+    if(!TICKERR){ TICKERR=1; console.error(err);
+      try{ toast('不具合', '描画でつまずいた', (err&&err.message)||'原因不明。星図に戻ると直ることがある。', false); }catch(e){} }
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ── 共通：空間の骨格 ─────────────────────────── */
+function setCam(near, far){
+  camera.near = near; camera.far = far; camera.updateProjectionMatrix();
+}
+function newScene(fogCol, near, far){
+  scene = new THREE.Scene();
+  G = { rear:false };
+  const stack = $('star-stack');
+  if(fogCol!=null){
+    scene.fog = new THREE.Fog(fogCol, near, far);
+    scene.background = new THREE.Color(fogCol);
+    if(stack) stack.style.visibility = 'hidden';
+  } else {
+    scene.background = null;
+    if(renderer) renderer.setClearColor(0x03050c, 0);
+    if(stack) stack.style.visibility = 'visible';
+  }
+  return scene;
+}
+function addSun(dir, intensity, size, color){
+  const l = new THREE.DirectionalLight(color||0xfff2df, intensity);
+  l.position.copy(dir); scene.add(l);
+  scene.add(new THREE.AmbientLight(0x35486b, 0.42));
+  if(size>0){ const s = glowSprite(color||0xffe6b0, size, 1); s.position.copy(dir.clone().multiplyScalar(1)); scene.add(s); G.sunSprite=s; }
+  G.sunDir = dir.clone().normalize();
+  return l;
+}
+function makePlanet(b, radius){
+  const grp = new THREE.Group();
+  const seed = (b.id.charCodeAt(0)+b.id.length*7)%9;
+  const tex = planetTexture(b.tex, b.color, b.id==='jupiter'?1:seed);
+  const mat = b.tex==='star'
+    ? new THREE.MeshBasicMaterial({map:tex})
+    : new THREE.MeshStandardMaterial({map:tex, roughness:0.92, metalness:0.0});
+  const m = new THREE.Mesh(new THREE.SphereGeometry(radius, 56, 38), mat);
+  grp.add(m); grp.userData.globe = m;
+  if(b.tex==='star'){
+    const halo = glowSprite(0xffc257, radius*4.6, 0.85); grp.add(halo);
+  } else {
+    const atm = new THREE.Mesh(new THREE.SphereGeometry(radius*1.035, 40, 26),
+      new THREE.MeshBasicMaterial({ color:b.tex==='earth'?0x86b8f0:b.color, transparent:true, opacity:0.16,
+        side:THREE.BackSide, blending:THREE.AdditiveBlending, depthWrite:false }));
+    grp.add(atm);
+  }
+  if(b.rings){ const r = makeRings(radius*1.35, radius*2.32, b.color); grp.add(r); r.rotation.z = 0.12;
+    if(b.id==='uranus'){ r.rotation.x = 0.1; r.rotation.z = 1.5; } grp.userData.ring=r; }
+  return grp;
+}
+
+/* ── 待機（タイトル／星図の背景） ─────────────── */
+function buildAttract(){
+  newScene(null); MODE='attract'; setCam(1, 40000);
+  starField(2600, 9000, scene);
+  addSun(new THREE.Vector3(-900,320,-1400), 1.5, 900, 0xfff0cf);
+  const e = makePlanet(BY_ID.earth, 120); e.position.set(58,-26,-230); scene.add(e); G.globe=e;
+  const m = makePlanet(BY_ID.moon, 32); m.position.set(-150,44,-420); scene.add(m); G.moon2=m;
+  camera.position.set(0,0,0); camera.rotation.set(0,0,0);
+  Audio2.ambience(58, 0.055);
+}
+function updAttract(dt){
+  if(G.globe) G.globe.rotation.y += dt*0.028;
+  if(G.moon2) G.moon2.rotation.y += dt*0.01;
+  camera.position.x = Math.sin(T*0.06)*9;
+  camera.position.y = Math.cos(T*0.043)*5;
+  camera.lookAt(30 + Math.sin(T*0.05)*24, -8, -260);
+}
+
+/* ── 航行 ─────────────────────────────────────── */
+function startCruise(bodyId){
+  const b = BY_ID[bodyId]; CUR = b; CURSAT = false;
+  newScene(null); MODE='cruise'; setCam(1, 90000);
+  G.body = b; G.dist0 = b.cruise; G.auto = false; G.speed = 90; G.t=0;
+  starField(3000, 30000, scene);
+  addSun(new THREE.Vector3(-4000,1200,-2000), b.id==='sun'?2.4:1.45, b.id==='sun'?0:2600, 0xfff0cf);
+  const rad = b.rad;
+  G.target = makePlanet(b, rad); G.target.position.set(0,0,-b.cruise); scene.add(G.target);
+  if(b.sat){ G.satPrev = makePlanet({id:b.sat.id,tex:'ice',color:0xdfe9f0}, rad*0.17);
+    G.satPrev.position.set(rad*2.4, rad*0.3, -b.cruise+rad*1.4); scene.add(G.satPrev); }
+  // 出発地
+  const from = makePlanet(BY_ID.earth, 130); from.position.set(-40,-30,420); scene.add(from); G.from=from;
+  G.ship = buildShip(); scene.add(G.ship);
+  camera.position.set(0,2.4,9);
+  // 速度感のための塵
+  const n=520, g=new THREE.BufferGeometry(), p=new Float32Array(n*3);
+  for(let i=0;i<n;i++){ p[i*3]=(Math.random()-0.5)*260; p[i*3+1]=(Math.random()-0.5)*160; p[i*3+2]=-Math.random()*900; }
+  g.setAttribute('position', new THREE.BufferAttribute(p,3));
+  G.dust = new THREE.Points(g, new THREE.PointsMaterial({color:0x9fc0e0,size:1.2,sizeAttenuation:false,transparent:true,opacity:0.5,depthWrite:false}));
+  scene.add(G.dust);
+  hudMode('cruise');
+  Audio2.ambience(64, 0.07);
+  toast('出港', b.name+'へ針路', 'WASDで操縦・SHIFTで加速・Fで自動操縦', true);
+}
+function shipFlight(dt, rate, minS, maxS){
+  if(!G.q) G.q = new THREE.Quaternion().copy(G.ship.quaternion);
+  const dq = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(-IN.fwd*rate*dt, -IN.turn*rate*dt, 0, 'YXZ'));
+  G.q.multiply(dq);
+  G.roll = lerp(G.roll||0, -IN.turn*0.44, clamp(dt*3,0,1));
+  const rq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), G.roll);
+  G.ship.quaternion.copy(G.q).multiply(rq);
+  const tgt = IN.boost ? maxS : (K[' ']? minS*0.35 : minS);
+  G.speed = lerp(G.speed, tgt, clamp(dt*(IN.boost?0.9:1.6),0,1));
+  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(G.q);
+  G.ship.position.addScaledVector(fwd, G.speed*dt);
+  const fl = G.ship.userData.flame;
+  if(fl){ const s = 1.5 + (G.speed/maxS)*3.4 + Math.sin(T*22)*0.16; fl.scale.set(s,s,1); }
+  return fwd;
+}
+function chaseCam(dt, dist, height){
+  const back = G.rear ? -1 : 1;
+  const off = new THREE.Vector3(0, height, dist*back).applyQuaternion(G.q);
+  const want = G.ship.position.clone().add(off);
+  camera.position.lerp(want, clamp(dt*4.2,0,1));
+  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(G.q);
+  const look = G.ship.position.clone().addScaledVector(fwd, 26*back);
+  camera.lookAt(look);
+  camera.up.set(0,1,0);
+}
+function updCruise(dt){
+  const b = G.body;
+  const fwd = shipFlight(dt, 0.85, 150, 620);
+  // 自動操縦・軽い航路補正
+  const toT = G.target.position.clone().sub(G.ship.position);
+  const dist = toT.length();
+  if(G.auto || (Math.abs(IN.fwd)<0.05 && Math.abs(IN.side)<0.05)){
+    const m = new THREE.Matrix4().lookAt(G.ship.position, G.target.position, new THREE.Vector3(0,1,0));
+    const qt = new THREE.Quaternion().setFromRotationMatrix(m);
+    G.q.slerp(qt, clamp(dt*(G.auto?0.9:0.2),0,1));
+  }
+  G.target.userData.globe.rotation.y += dt*0.04;
+  if(G.dust){
+    const pos = G.dust.geometry.attributes.position;
+    G.dust.position.copy(G.ship.position); G.dust.quaternion.copy(G.ship.quaternion);
+    for(let i=0;i<pos.count;i++){
+      let z = pos.getZ(i) + G.speed*dt*1.1;
+      if(z>20){ z=-900; pos.setX(i,(Math.random()-0.5)*260); pos.setY(i,(Math.random()-0.5)*160); }
+      pos.setZ(i,z);
+    }
+    pos.needsUpdate = true;
+  }
+  chaseCam(dt, 9.5, 2.6);
+  const prog = clamp(1-(dist-b.rad*3)/(G.dist0-b.rad*3), 0, 1);
+  const off = THREE.MathUtils.radToDeg(fwd.angleTo(toT.normalize()));
+  hud({ t:'NAVIGATION ─ 航行中',
+    l1:'目標', v1:b.name,
+    l2:'残距離', v2:fmtKm(dist, b),
+    l3:'速度', v3:Math.round(G.speed*640).toLocaleString()+' km/h',
+    bar:prog*100 });
+  setHint('<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>SPACE</b> 減速 ・ <b>C</b> 後方視界 ・ <b>F</b> 自動操縦'
+    + (off>18 ? ' ── <b style="color:var(--ember)">針路ずれ '+off.toFixed(0)+'°</b>' : ''));
+  if(off>22 && !G.warned){ G.warned=1; setTimeout(()=>G.warned=0, 6000); }
+  if(dist < b.rad*3.1) enterOrbit(b);
+}
+function fmtKm(u, b){
+  const km = u*(b.id==='moon'?620:5400);
+  if(km>1e8) return (km/1e8).toFixed(2)+' 億km';
+  if(km>1e4) return (km/1e4).toFixed(1)+' 万km';
+  return Math.round(km).toLocaleString()+' km';
+}
+/* ===========================================================
+   周回・観測 — 惑星のまわりを飛び、記録する
+   =========================================================== */
+function makeMarker(color, size){
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(size, size*0.055, 6, 28),
+    new THREE.MeshBasicMaterial({color:color, transparent:true, opacity:0.85}));
+  g.add(ring); g.userData.ring = ring;
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(size*0.62, size*0.03, 6, 22),
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.4}));
+  ring2.rotation.x = Math.PI/2.4; g.add(ring2); g.userData.ring2 = ring2;
+  const glow = glowSprite(color, size*2.5, 0.6); g.add(glow); g.userData.glow = glow;
+  return g;
+}
+function spherePos(r, lat, lon){
+  return new THREE.Vector3(r*Math.cos(lat)*Math.cos(lon), r*Math.sin(lat), r*Math.cos(lat)*Math.sin(lon));
+}
+function enterOrbit(b){
+  CUR = b; CURSAT = false;
+  newScene(null); MODE='orbit'; setCam(1, 90000);
+  G.body = b; G.R = b.rad; G.speed = 40;
+  starField(2800, 40000, scene);
+  const sunDir = new THREE.Vector3(-1,0.32,-0.55).normalize().multiplyScalar(b.rad*46);
+  addSun(sunDir, b.id==='sun'?0.9:1.55, b.id==='sun'?0:b.rad*10, 0xfff0cf);
+  G.planet = makePlanet(b, b.rad); scene.add(G.planet);
+  // 衛星
+  if(b.sat){
+    const sb = { id:b.sat.id, tex:b.sat.surf==='dune'?'cloud':'rock', color:b.sat.surf==='dune'?0xc98a45:0xdae6ef };
+    G.sat = makePlanet(sb, b.rad*0.15);
+    G.satAng = 0.7; scene.add(G.sat);
+  }
+  // 観測目標
+  G.marks = [];
+  const obs = b.obs||[];
+  obs.forEach((o,i)=>{
+    const done = has(b.id+':'+o.k);
+    const m = makeMarker(done?0x57a897:0xe8a33d, b.rad*0.1);
+    m.position.copy(spherePos(b.rad*(1.55+ (i%2)*0.35), Math.sin(i*1.7)*0.72, i*2.39));
+    m.userData.rec = { key:b.id+':'+o.k, n:o.n, t:o.t, kind:'観測' };
+    m.userData.done = done;
+    scene.add(m); G.marks.push(m);
+  });
+  G.ship = buildShip();
+  G.ship.position.copy(spherePos(b.rad*2.5, 0.25, -1.1));
+  G.q = new THREE.Quaternion();
+  const mm = new THREE.Matrix4().lookAt(G.ship.position,
+    new THREE.Vector3(0,0,0).lerp(G.ship.position,0.2), new THREE.Vector3(0,1,0));
+  G.q.setFromRotationMatrix(mm);
+  scene.add(G.ship);
+  camera.position.copy(G.ship.position).add(new THREE.Vector3(0,4,12));
+  hudMode('orbit');
+  Audio2.ambience(b.id==='sun'?48:88, 0.06);
+  if(mark(b.id+':reach')){
+    toast('到達', b.name+'圏に入る', b.mission, false);
+    Audio2.chord([392,523,659]);
+  } else {
+    toast('周回軌道', b.name, b.sat? b.sat.name+'に降りられる' : (b.surf? '降下できる':'観測のみ'), true);
+  }
+  updMapPct();
+}
+function updOrbit(dt){
+  const b = G.body, R = G.R;
+  shipFlight(dt, 0.9, 52, 190);
+  // 惑星に近づきすぎない
+  const d = G.ship.position.length();
+  if(d < R*1.12){
+    G.ship.position.normalize().multiplyScalar(R*1.12);
+    if(!G.alt || T-G.alt>3){ G.alt=T; toast('警報','高度が低い','これ以上は降下シーケンスで',true); }
+  }
+  if(d > R*9){ G.ship.position.normalize().multiplyScalar(R*9);
+    if(!G.far || T-G.far>4){ G.far=T; toast('航法','圏外に出そう','船を惑星の方へ向けて',true);} }
+  G.planet.userData.globe.rotation.y += dt*(b.tex==='band'?0.07:0.03);
+  if(G.sat){
+    G.satAng += dt*0.035;
+    G.sat.position.copy(spherePos(R*3.1, 0.18, G.satAng));
+    G.sat.rotation.y += dt*0.02;
+  }
+  // 目標との判定
+  let near=null, nd=1e9;
+  for(const m of G.marks){
+    m.userData.ring.rotation.z += dt*0.6; m.userData.ring2.rotation.y += dt*0.9;
+    const dd = m.position.distanceTo(G.ship.position);
+    if(dd<nd){ nd=dd; near=m; }
+    const sc = m.userData.done?0.55:1;
+    m.userData.glow.material.opacity = sc*(0.42+Math.sin(T*2+m.position.x)*0.12);
+  }
+  G.near = (near && nd < R*0.5 && !near.userData.done) ? near : null;
+  // 着陸判定
+  let landable = null;
+  if(G.sat){ const ds = G.sat.position.distanceTo(G.ship.position);
+    if(ds < R*0.62) landable = {kind:'sat', name:b.sat.name}; }
+  else if(b.surf && d < R*1.55) landable = {kind:'surf', name:b.name};
+  G.landable = landable;
+
+  chaseCam(dt, 11, 3.4);
+  const doneN = (b.obs||[]).filter(o=>has(b.id+':'+o.k)).length;
+  hud({ t:'ORBIT ─ 周回軌道',
+    l1:'天体', v1:b.name,
+    l2:'高度', v2:Math.round((d-R)*(b.rad>200?90:40)).toLocaleString()+' km',
+    l3:'観測', v3:doneN+' / '+(b.obs||[]).length,
+    bar: (b.obs&&b.obs.length)? doneN/b.obs.length*100 : 100 });
+  // 文脈ボタン
+  const acts = [];
+  if(G.near) acts.push({l:'観測する', k:'E', f:()=>act('record')});
+  if(landable) acts.push({l: landable.kind==='sat'? landable.name+'に降りる' : '着陸シーケンス', k:'L', f:()=>act('land')});
+  acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
+  setActions(acts);
+  // 目標ラベル
+  if(near && nd < R*2.6) showLabel(near.position, (near.userData.done?'記録済 ':'観測目標 ')+near.userData.rec.n);
+  else if(G.sat && G.sat.position.distanceTo(G.ship.position)<R*2.2) showLabel(G.sat.position, b.sat.name);
+  else hideLabel();
+  setHint('<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>E</b> 観測 ・ <b>P</b> 撮影'
+    + (landable? ' ・ <b>L</b> 降下':'') + ' ・ <b>ESC</b> 星図');
+}
+
+/* ── 画面上のラベル ─────────────────────────── */
+function showLabel(pos3, text){
+  const v = pos3.clone().project(camera);
+  const el = $('tgtLabel');
+  if(v.z>1 || v.x<-1.1 || v.x>1.1 || v.y<-1.1 || v.y>1.1){ el.hidden=true; return; }
+  const host = $('game');
+  el.hidden = false; el.textContent = text;
+  el.style.left = ((v.x*0.5+0.5)*host.clientWidth)+'px';
+  el.style.top  = ((-v.y*0.5+0.5)*host.clientHeight - 26)+'px';
+}
+function hideLabel(){ $('tgtLabel').hidden = true; }
+
+/* ── 記録・撮影・着陸 ───────────────────────── */
+function act(kind){
+  if(PAUSED) return;
+  if(!$('log').hidden || !$('map').hidden || !$('title').hidden) return;
+  if(kind==='record'){
+    if(MODE==='orbit' && G.near){
+      const r = G.near.userData.rec;
+      if(mark(r.key)){
+        G.near.userData.done = true;
+        G.near.userData.ring.material.color.set(0x57a897);
+        toast(r.kind, r.n, r.t, false); Audio2.chord([523,659,784]);
+        G.near = null; updMapPct(); checkComplete();
+      }
+    } else if(MODE==='surface' && G.nearFind){
+      const r = G.nearFind.userData.rec;
+      if(mark(r.key)){
+        G.nearFind.userData.done = true;
+        G.nearFind.userData.ring.material.color.set(0x57a897);
+        toast('発見', r.n, r.t, false); Audio2.chord([440,587,698]);
+        G.nearFind = null; updMapPct(); checkComplete();
+      }
+    } else toast('記録', '対象がない', '光っている目標に近づいて', true);
+  }
+  if(kind==='shoot'){
+    if(MODE==='cruise'||MODE==='orbit'||MODE==='surface'){
+      pendingShot = { body: CURSAT? (CUR.sat?CUR.sat.name:CUR.name) : CUR.name };
+    }
+  }
+  if(kind==='land'){
+    if(MODE==='orbit' && G.landable){
+      if(G.landable.kind==='sat') startDescend(CUR.sat, true);
+      else startDescend(CUR, false);
+    }
+  }
+}
+function capture(info){
+  try{
+    const src = renderer.domElement;
+    const cv = document.createElement('canvas'); cv.width=352; cv.height=198;
+    const g = cv.getContext('2d');
+    const sw = src.width, sh = src.height, ar = 352/198;
+    let cw = sw, ch = sw/ar; if(ch>sh){ ch=sh; cw=sh*ar; }
+    g.drawImage(src, (sw-cw)/2, (sh-ch)/2, cw, ch, 0, 0, 352, 198);
+    const url = cv.toDataURL('image/jpeg', 0.6);
+    SAVE.photos.unshift({ u:url, n:info.body, d:new Date().toISOString().slice(0,10) });
+    if(SAVE.photos.length>18) SAVE.photos.length = 18;
+    mark('photo:'+info.body);
+    writeSave();
+    const f = $('flash'); f.style.transition='none'; f.style.opacity='0.85';
+    requestAnimationFrame(()=>{ f.style.transition='opacity .45s'; f.style.opacity='0'; });
+    Audio2.blip(1400, 0.06, 'square'); Audio2.noise(0.1, 0.06);
+    toast('撮影', info.body+' を記録', '航海日誌に写真を貼った', true);
+    updMapPct();
+    // 空に向けた撮影の判定
+    checkSkyShot();
+  }catch(e){ toast('撮影','失敗','この端末では写真を保存できない',true); }
+}
+function checkSkyShot(){
+  if(MODE!=="surface" || !G.skyShot || !G.skyAim) return;
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const to = G.skyAim.position.clone().sub(camera.position).normalize();
+  if(dir.angleTo(to) < 0.34){
+    const r = G.skyShot;
+    if(mark(r.key)){ toast('観測', r.n, r.t, false); Audio2.chord([523,698,880]); updMapPct(); checkComplete(); }
+  }
+}
+function checkComplete(){
+  const b = CUR; if(!b) return;
+  const s = bodyScore(b);
+  if(s.got>=s.total && !has(b.id+':clear')){
+    mark(b.id+':clear');
+    setTimeout(()=>toast('完了', b.name+' の記録が埋まった', '星図から次の星へ', false), 900);
+  }
+}
+/* ===========================================================
+   地表 — 降下・歩行・探査車・発見
+   =========================================================== */
+const GRAV = { earth:21, moon:3.5, mercury:8, venus:19, mars:8, europa:2.6, titan:2.9, miranda:1.3, triton:1.7 };
+const SKY_ONLY = { 'europa:jrise':1, 'titan:ring':1 };
+const SKYSHOT = {
+  moon:{ from:'moon', k:'rise', aim:'parent' }, mercury:{ from:'mercury', k:'big', aim:'sun' },
+  mars:{ from:'mars', k:'dusk', aim:'sun' },
+  europa:{ from:'europa', k:'jrise', aim:'parent' }, titan:{ from:'titan', k:'ring', aim:'parent' }
+};
+
+function gradientSky(top, bottom){
+  const cv=document.createElement('canvas'); cv.width=4; cv.height=256; const g=cv.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,256);
+  gr.addColorStop(0,'#'+new THREE.Color(top).getHexString());
+  gr.addColorStop(0.62,'#'+new THREE.Color(top).lerp(new THREE.Color(bottom),0.7).getHexString());
+  gr.addColorStop(1,'#'+new THREE.Color(bottom).getHexString());
+  g.fillStyle=gr; g.fillRect(0,0,4,256);
+  const t=new THREE.CanvasTexture(cv);
+  const m=new THREE.Mesh(new THREE.SphereGeometry(1400,32,20),
+    new THREE.MeshBasicMaterial({map:t, side:THREE.BackSide, fog:false, depthWrite:false}));
+  return m;
+}
+function buildTerrain(cfg){
+  const S=480, N=144;
+  const geo = new THREE.PlaneGeometry(S,S,N,N);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count*3);
+  const cA = new THREE.Color(cfg.ground[0]), cB = new THREE.Color(cfg.ground[1]), c = new THREE.Color();
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i), z=pos.getZ(i);
+    const y = heightAt(x,z); pos.setY(i,y);
+    const t = clamp(0.5 + y*0.055 + (fbm(x*0.06,z*0.06,2,2)-0.5)*0.75, 0, 1);
+    c.copy(cA).lerp(cB, t);
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.97, metalness:0.0, flatShading:true}));
+}
+function rockMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.95, flatShading:true}); }
+function metalMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.42, metalness:0.72, flatShading:true}); }
+
+function propFor(k, cfg){
+  const g = new THREE.Group();
+  const m = metalMat(0xb9c2cc), d = metalMat(0x4a5464), r = rockMat(cfg.rock);
+  const add=(mesh,x,y,z)=>{ mesh.position.set(x||0,y||0,z||0); g.add(mesh); return mesh; };
+  switch(k){
+    case 'gantry': case 'moor': {
+      for(const s of [-1,1]) for(const u of [-1,1]){
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.3,17,5), m); add(leg, s*1.9, 8.5, u*1.9);
+      }
+      for(let i=1;i<5;i++){ const b=new THREE.Mesh(new THREE.BoxGeometry(4.4,0.22,4.4), d); add(b,0,i*3.6,0); }
+      add(new THREE.Mesh(new THREE.BoxGeometry(5.6,0.5,2.2), d), 2.4, 12, 0);
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,5,4), m), 0, 19, 0);
+      const lamp = glowSprite(0xff5a3c, 2.2, 0.8); add(lamp, 0, 21, 0); break; }
+    case 'capsule': {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(1.5,2.1,2.4,12), m); add(c,0,1.5,0);
+      add(new THREE.Mesh(new THREE.SphereGeometry(2.1,12,8,0,TAU,Math.PI/2,Math.PI/2), rockMat(0x24262b)),0,0.5,0);
+      add(new THREE.Mesh(new THREE.ConeGeometry(1.5,1.2,12), d),0,3.3,0); break; }
+    case 'dish': {
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.42,7,6), m),0,3.5,0);
+      const p = new THREE.Mesh(new THREE.SphereGeometry(3.4,18,10,0,TAU,0,Math.PI/2.6),
+        new THREE.MeshStandardMaterial({color:0xdfe6ee, roughness:0.5, metalness:0.4, side:THREE.DoubleSide}));
+      p.rotation.x = 2.5; add(p,0,7.4,0);
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,2,4), d),0,6.6,-1); break; }
+    case 'mono': {
+      add(new THREE.Mesh(new THREE.BoxGeometry(1.5,7.2,1.5), rockMat(0x2e3238)),0,3.6,0);
+      add(new THREE.Mesh(new THREE.BoxGeometry(2.6,0.5,2.6), rockMat(0x3b4048)),0,0.25,0);
+      add(new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,0.1), new THREE.MeshBasicMaterial({color:0xe8a33d})),0,5.4,0.78); break; }
+    case 'wind': {
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.14,8,5), m),0,4,0);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.5),
+        new THREE.MeshStandardMaterial({color:0xc94f3a, side:THREE.DoubleSide, roughness:1}));
+      add(f,1.2,7,0); g.userData.flag=f;
+      add(new THREE.Mesh(new THREE.SphereGeometry(0.4,8,6), m),0,8.2,0); break; }
+    case 'dome': case 'hut': case 'base': {
+      const dm = new THREE.Mesh(new THREE.SphereGeometry(4.2,18,12,0,TAU,0,Math.PI/2),
+        new THREE.MeshStandardMaterial({color:0xdde3ea, roughness:0.5, metalness:0.3, flatShading:true}));
+      add(dm,0,0,0);
+      add(new THREE.Mesh(new THREE.BoxGeometry(2,2.2,3.4), d),4.2,1.1,0);
+      for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.12,2), new THREE.MeshStandardMaterial({color:0x1b2a49,metalness:0.6,roughness:0.3}));
+        p.rotation.z=0.3; add(p,s*7,2.2,2.4); add(new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,2.2,4),m),s*7,1.1,2.4); }
+      const l = glowSprite(0x8fe8c8, 3, 0.7); add(l,0,4.6,0); break; }
+    case 'leg': {
+      add(new THREE.Mesh(new THREE.BoxGeometry(2.4,1.4,2.4), metalMat(0xc8b98a)),0,1.6,0);
+      for(const s of [-1,1]) for(const u of [-1,1]){
+        const lg=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,3.2,4), m);
+        lg.rotation.set(u*0.5,0,s*0.5); add(lg,s*1.5,0.9,u*1.5);
+        add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.18,8), d),s*2.3,0.1,u*2.3); }
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,2.6,4), m),0,3.5,0); break; }
+    case 'peak': {
+      const c=new THREE.Mesh(new THREE.ConeGeometry(9,15,7), r); add(c,0,6,0); break; }
+    case 'ridge': {
+      const b=new THREE.Mesh(new THREE.BoxGeometry(46,7,4.5), r); b.rotation.set(0,0.4,0.06); add(b,0,1.6,0); break; }
+    case 'shard': case 'lin': case 'cryo': {
+      for(let i=0;i<7;i++){ const h=3+Math.random()*9;
+        const s=new THREE.Mesh(new THREE.ConeGeometry(0.5+Math.random()*1.1,h,5),
+          new THREE.MeshStandardMaterial({color:0xdcecf6, roughness:0.28, metalness:0.05, flatShading:true, transparent:true, opacity:0.92}));
+        s.rotation.set((Math.random()-0.5)*0.4,Math.random(),(Math.random()-0.5)*0.4);
+        add(s,(Math.random()-0.5)*7, h/2-0.5, (Math.random()-0.5)*7); } break; }
+    case 'ice': case 'patch': {
+      const p=new THREE.Mesh(new THREE.CircleGeometry(5.5,20),
+        new THREE.MeshStandardMaterial({color:0xe6f2fa, roughness:0.3, metalness:0.1}));
+      p.rotation.x=-Math.PI/2; add(p,0,0.25,0);
+      add(new THREE.Mesh(new THREE.SphereGeometry(1.1,10,7), new THREE.MeshStandardMaterial({color:0xf2fbff,roughness:0.2})),1.4,0.5,-1); break; }
+    case 'lake': {
+      const p=new THREE.Mesh(new THREE.CircleGeometry(15,30),
+        new THREE.MeshStandardMaterial({color:0x2a1c12, roughness:0.08, metalness:0.85}));
+      p.rotation.x=-Math.PI/2; add(p,0,0.35,0); g.userData.lake=p; break; }
+    case 'flag': case 'track': case 'foot': case 'devil': case 'chan': case 'retro': case 'melon': {
+      const p=new THREE.Mesh(new THREE.CircleGeometry(4.2,18),
+        new THREE.MeshStandardMaterial({color:0x000000, transparent:true, opacity:0.3, roughness:1}));
+      p.rotation.x=-Math.PI/2; add(p,0,0.22,0);
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,2.4,4), m),1.6,1.2,1.2); break; }
+    case 'platform': case 'light': case 'rot': case 'drop': {
+      const deck=new THREE.Mesh(new THREE.CylinderGeometry(6,6,0.4,10), metalMat(0x8f97a3)); add(deck,0,1.6,0);
+      for(let i=0;i<5;i++){ const a=i/5*TAU;
+        add(new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,3.4,4), m), Math.cos(a)*4.6, 0.2, Math.sin(a)*4.6); }
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,6,6), m),0,4.6,0);
+      const van=new THREE.Mesh(new THREE.BoxGeometry(3,0.3,0.6), metalMat(0xd9c08a)); add(van,1.4,7.4,0); g.userData.vane=van;
+      const l=glowSprite(0xffd07a,2.4,0.7); add(l,0,7.8,0); break; }
+    default: {
+      for(let i=0;i<4;i++){ const s=0.7+Math.random()*1.8;
+        const b=new THREE.Mesh(new THREE.DodecahedronGeometry(s,0), r);
+        b.rotation.set(Math.random(),Math.random(),Math.random());
+        add(b,(Math.random()-0.5)*5, s*0.55, (Math.random()-0.5)*5); }
+    }
+  }
+  return g;
+}
+
+/* ── 空に浮かぶ親天体 ───────────────────────── */
+function addSkyBody(kind){
+  if(!kind) return null;
+  const spec = {
+    earth:{id:'earth', r:62, dist:760, tex:'earth', c:0x2f6fb5, h:0.42},
+    jupiter:{id:'jupiter', r:170, dist:900, tex:'band', c:0xd8b48a, h:0.34},
+    saturn:{id:'saturn', r:120, dist:900, tex:'band', c:0xe2cd9b, h:0.4, rings:true},
+    uranus:{id:'uranus', r:90, dist:900, tex:'band', c:0x9fd8dc, h:0.45, rings:true},
+    neptune:{id:'neptune', r:82, dist:900, tex:'band', c:0x3f62c8, h:0.45},
+    phobos:{id:'phobos', r:9, dist:420, tex:'rock', c:0x9a8a7a, h:0.6},
+    sunbig:null
+  }[kind];
+  if(!spec) return null;
+  const grp = makePlanet({id:spec.id, tex:spec.tex, color:spec.c, rings:spec.rings}, spec.r);
+  grp.traverse(o=>{ if(o.material){ o.material.fog=false; } });
+  const a = 2.1;
+  grp.position.set(Math.cos(a)*spec.dist*Math.cos(spec.h), Math.sin(spec.h)*spec.dist, Math.sin(a)*spec.dist*Math.cos(spec.h));
+  scene.add(grp);
+  return grp;
+}
+
+/* ── 地表を作る ─────────────────────────────── */
+function buildSurface(obj, isSat){
+  const cfgName = obj.surf, cfg = SURF[cfgName];
+  const seed = (obj.id.charCodeAt(0)*3 + obj.id.length)%17;
+  terrainInit(cfgName, seed);
+  const airless = cfg.star >= 0.9;
+  newScene(airless? null : cfg.sky[1], cfg.fogNear, cfg.fogFar);
+  if(airless) scene.fog = new THREE.Fog(0x05070e, cfg.fogNear, cfg.fogFar);
+  setCam(0.5, 4200);
+  MODE='surface'; CURSAT = !!isSat; G.obj = obj; G.cfg = cfg; G.grav = GRAV[obj.id] || 9;
+
+  if(cfg.star>0) starField(1400, 1200, scene).material.opacity = cfg.star;
+  if(!airless) scene.add(gradientSky(cfg.sky[0], cfg.sky[1]));
+
+  const sunDir = new THREE.Vector3(0.55,0.42,-0.72).normalize().multiplyScalar(900);
+  const sl = new THREE.DirectionalLight(0xfff1d8, cfg.sun); sl.position.copy(sunDir); scene.add(sl);
+  scene.add(new THREE.HemisphereLight(airless?0x20304a:cfg.sky[1], cfg.ground[0], cfg.amb));
+  const sunSize = obj.id==='mercury'? 210 : (obj.id==='titan'? 0 : 70);
+  if(sunSize>0){ const s = glowSprite(0xffeec2, sunSize, 0.95); s.position.copy(sunDir); scene.add(s); G.sunSprite=s; }
+  G.sunPos = sunDir;
+
+  G.terrain = buildTerrain(cfg); scene.add(G.terrain);
+  G.skyBody = addSkyBody(obj.moonSky);
+
+  // 岩
+  const rm = rockMat(cfg.rock);
+  for(let i=0;i<110;i++){
+    const a=Math.random()*TAU, d=16+Math.random()*212, x=Math.cos(a)*d, z=Math.sin(a)*d;
+    const s=0.5+Math.random()*2.6;
+    const b=new THREE.Mesh(new THREE.DodecahedronGeometry(s,0), rm);
+    b.position.set(x, heightAt(x,z)+s*0.35, z); b.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
+    b.scale.y = 0.7+Math.random()*0.5; scene.add(b);
+  }
+  if(cfgName==='dune'||cfgName==='rocky'){ // 遠景の丘
+    for(let i=0;i<9;i++){ const a=Math.random()*TAU, d=300+Math.random()*180;
+      const h=22+Math.random()*40;
+      const m=new THREE.Mesh(new THREE.ConeGeometry(50+Math.random()*60,h,6), rm);
+      m.position.set(Math.cos(a)*d, h*0.3, Math.sin(a)*d); scene.add(m); }
+  }
+
+  // 発見目標＋構造物
+  G.finds = [];
+  const list = (obj.finds||[]).filter(f => !SKY_ONLY[obj.id+':'+f.k]);
+  list.forEach((f,i)=>{
+    const a = i*2.399 + seed*0.4, d = 36 + (i%3)*32 + (i*17%26);
+    const x = Math.cos(a)*d, z = Math.sin(a)*d, y = heightAt(x,z);
+    const pr = propFor(f.k, cfg); pr.position.set(x,y,z); pr.rotation.y = a; scene.add(pr);
+    const done = has(obj.id+':'+f.k);
+    const mk = makeMarker(done?0x57a897:0xe8a33d, 2.1);
+    mk.position.set(x, y+6.2, z); mk.rotation.x = Math.PI/2;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,12,6),
+      new THREE.MeshBasicMaterial({color:done?0x57a897:0xe8a33d, transparent:true, opacity:0.2, depthWrite:false, blending:THREE.AdditiveBlending}));
+    beam.position.set(x, y+6, z); scene.add(beam); mk.userData.beam = beam;
+    mk.userData.rec = { key:obj.id+':'+f.k, n:f.n, t:f.t };
+    mk.userData.done = done; mk.userData.ground = new THREE.Vector3(x,y,z);
+    scene.add(mk); G.finds.push(mk);
+  });
+  // 空に向けた撮影で埋まる記録
+  const ss = SKYSHOT[obj.id];
+  G.skyShot = null; G.skyAim = null;
+  if(ss){
+    const src = BY_ID[ss.from];
+    const pool = (src.finds||[]).concat(src.obs||[]);
+    const e = pool.filter(o=>o.k===ss.k)[0];
+    if(e && !has(ss.from+':'+e.k)) G.skyShot = { key:ss.from+':'+e.k, n:e.n, t:e.t };
+    G.skyAim = (ss.aim==='sun') ? { position: sunDir } : G.skyBody;
+  }
+
+  // 主人公
+  G.rover = !!obj.rover && !isSat;
+  G.player = buildWalker(G.rover);
+  G.pl = { x:0, z:0, y:heightAt(0,0), vy:0, vx:0, vz:0, ground:true, face:0 };
+  G.player.position.set(0, G.pl.y, 0); scene.add(G.player);
+  // 着陸船
+  G.lander = buildShip(); G.lander.scale.setScalar(1.35);
+  G.lander.position.set(-13, heightAt(-13,7)+1.6, 7); G.lander.rotation.y = 0.9;
+  if(G.lander.userData.flame) G.lander.userData.flame.visible = false;
+  scene.add(G.lander);
+  IN.look.x = 0; IN.look.y = 0.13; IN.zoom = G.rover? 11 : 8.5;
+  hudMode('surface');
+  Audio2.ambience(airless? 44 : 96, airless? 0.035 : 0.075);
+}
+function buildWalker(isRover){
+  const g = new THREE.Group();
+  if(isRover){
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.9,4.0), metalMat(0xc9ccd2)); body.position.y=1.25; g.add(body);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.9,0.7,1.8), metalMat(0x39414f)); top.position.set(0,1.95,-0.4); g.add(top);
+    const pan = new THREE.Mesh(new THREE.BoxGeometry(3.2,0.08,1.7), new THREE.MeshStandardMaterial({color:0x1c2f57,metalness:0.7,roughness:0.25}));
+    pan.position.set(0,2.4,0.9); g.add(pan);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.4,5), metalMat(0xb0b6bf)); mast.position.set(0,2.6,-1.1); g.add(mast);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.35,0.35), metalMat(0x2b3242)); head.position.set(0,3.3,-1.1); g.add(head);
+    g.userData.wheels=[];
+    for(const s of [-1,1]) for(const u of [-1,0,1]){
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.44,10), rockMat(0x21242b));
+      w.rotation.z = Math.PI/2; w.position.set(s*1.5, 0.62, u*1.45); g.add(w); g.userData.wheels.push(w);
+    }
+  } else {
+    const suit = new THREE.MeshStandardMaterial({color:0xe9edf2, roughness:0.62, metalness:0.12, flatShading:true});
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,1.15,8), suit); torso.position.y=1.32; g.add(torso);
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.9,0.42), metalMat(0xb9c0c9)); pack.position.set(0,1.38,-0.42); g.add(pack);
+    const helm = new THREE.Mesh(new THREE.SphereGeometry(0.38,14,10), suit); helm.position.y=2.12; g.add(helm);
+    const vis = new THREE.Mesh(new THREE.SphereGeometry(0.335,14,10),
+      new THREE.MeshStandardMaterial({color:0x1c2a3a, metalness:0.9, roughness:0.12, emissive:0x0a1a28}));
+    vis.position.set(0,2.12,0.1); vis.scale.z=0.8; g.add(vis);
+    g.userData.legs=[];
+    for(const s of [-1,1]){
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.13,1.0,6), suit);
+      leg.position.set(s*0.2,0.5,0); g.add(leg); g.userData.legs.push(leg);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.11,0.95,6), suit);
+      arm.position.set(s*0.58,1.42,0); arm.rotation.z = s*0.22; g.add(arm); g.userData.legs.push(arm);
+    }
+    const lamp = glowSprite(0xffd79a, 1.6, 0.5); lamp.position.set(0,2.1,0.4); g.add(lamp);
+  }
+  return g;
+}
+
+/* ── 降下シーケンス ─────────────────────────── */
+function startDescend(obj, isSat){
+  buildSurface(obj, isSat);
+  MODE = 'descend';
+  G.desc = { t:0, dur:6.4, drift:0 };
+  $('hud').hidden = true; $('descend').hidden = false;
+  $('dsPhase').textContent = (isSat? obj.name : obj.name) + ' 降下シーケンス';
+  Audio2.noise(1.2, 0.05);
+}
+function updDescend(dt){
+  const d = G.desc; d.t += dt;
+  const p = clamp(d.t/d.dur, 0, 1), e = p*p*(3-2*p);
+  d.drift = clamp(d.drift + IN.side*dt*9, -22, 22);
+  const alt = lerp(300, 0, e);
+  const px = G.pl.x + d.drift*(1-e), pz = G.pl.z;
+  const gy = heightAt(px,pz);
+  camera.position.set(px, gy + 2.6 + alt, pz + 9 + alt*0.5);
+  camera.lookAt(px, gy + 1.4 + alt*0.22, pz);
+  if(G.lander){
+    G.lander.position.set(px, gy + 1.6 + alt*0.98, pz);
+    G.lander.rotation.set(lerp(-0.5,0,e), 0.9, 0);
+    if(G.lander.userData.flame){ G.lander.userData.flame.visible = p<0.99;
+      const s = 2.6+Math.sin(T*30)*0.4; G.lander.userData.flame.scale.set(s,s,1); }
+  }
+  if(G.player) G.player.visible = p>0.985;
+  const vel = Math.round((1-e)*430 + 4);
+  $('dsStat').innerHTML = '高度 <b>'+Math.round(alt*14).toLocaleString()+' m</b> ・ 降下速度 <b>'+vel+' m/s</b>'
+    + '<br>A / D で着地点をずらせる';
+  if(p>=1){
+    $('descend').hidden = true; $('hud').hidden = false;
+    G.pl.x = px; G.pl.y = gy; G.player.position.set(px,gy,pz); G.player.visible = true;
+    MODE = 'surface';
+    Audio2.noise(0.6, 0.14); Audio2.chord([330,392,494]);
+    const o = G.obj;
+    if(mark(o.id+':land')){
+      toast('着陸', o.name+' に着陸', 'ソフト着陸。脚に異常なし。ここから歩ける。', false);
+    } else toast('着陸', o.name+' に再着陸', '記録の続きを埋めよう', true);
+    updMapPct(); checkComplete();
+  }
+}
+
+/* ── 地表の更新 ─────────────────────────────── */
+function updSurface(dt){
+  const pl = G.pl, cfg = G.cfg;
+  // 視点（ドラッグ／矢印で回す）
+  const yaw = IN.look.x, pitch = IN.look.y;
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+  const spd = G.rover? 21 : 8.4;
+  const wantX = (fx*IN.fwd + rx*IN.side)*spd;
+  const wantZ = (fz*IN.fwd + rz*IN.side)*spd;
+  const accel = pl.ground? 9.5 : 2.2;
+  pl.vx = lerp(pl.vx, wantX, clamp(dt*accel,0,1));
+  pl.vz = lerp(pl.vz, wantZ, clamp(dt*accel,0,1));
+  pl.x += pl.vx*dt; pl.z += pl.vz*dt;
+  // 境界
+  const rr = Math.hypot(pl.x,pl.z);
+  if(rr>215){ const k=215/rr; pl.x*=k; pl.z*=k; pl.vx*=0.4; pl.vz*=0.4;
+    if(!G.edge || T-G.edge>5){ G.edge=T; toast('航法','ここから先は未踏査域','船の周りを探索しよう',true);} }
+  // 重力
+  const gy = heightAt(pl.x, pl.z);
+  pl.vy -= G.grav*dt;
+  pl.y += pl.vy*dt;
+  if(pl.y <= gy){
+    if(!pl.ground && pl.vy < -8) Audio2.noise(0.18, 0.05);
+    pl.y = gy; pl.vy = 0; pl.ground = true;
+  } else pl.ground = false;
+  if(IN.jump && pl.ground){
+    pl.vy = 5.4 + G.grav*0.46; pl.ground=false; IN.jump=false;
+    Audio2.blip(180+G.grav*8, 0.14, 'triangle');
+  }
+  // 姿勢
+  const moving = Math.hypot(pl.vx,pl.vz);
+  if(moving>0.6){ const want = Math.atan2(pl.vx, pl.vz);
+    let dA = want - pl.face; while(dA>Math.PI) dA-=TAU; while(dA<-Math.PI) dA+=TAU;
+    pl.face += dA*clamp(dt*7,0,1); }
+  G.player.position.set(pl.x, pl.y, pl.z);
+  G.player.rotation.y = pl.face;
+  // 接地に合わせて少し傾ける
+  const hL = heightAt(pl.x-1.2, pl.z), hR = heightAt(pl.x+1.2, pl.z);
+  G.player.rotation.z = clamp((hL-hR)*0.2, -0.3, 0.3);
+  if(G.rover && G.player.userData.wheels){
+    const s = moving*dt*1.6;
+    G.player.userData.wheels.forEach(w=>{ w.rotation.x += s; });
+  } else if(G.player.userData.legs){
+    const t = Math.sin(T*(6+moving*0.5))*clamp(moving*0.09,0,0.5);
+    G.player.userData.legs.forEach((l,i)=>{ l.rotation.x = t*(i%2?1:-1); });
+  }
+  // カメラ
+  const dist = IN.zoom * (G.rover?1.25:1);
+  const cx = pl.x - fx*dist*Math.cos(pitch), cz = pl.z - fz*dist*Math.cos(pitch);
+  const cy = pl.y + 2.2 + dist*Math.sin(pitch)+0.8;
+  const ground = heightAt(cx,cz)+1.2;
+  camera.position.lerp(new THREE.Vector3(cx, Math.max(cy,ground), cz), clamp(dt*7,0,1));
+  camera.lookAt(pl.x, pl.y+1.7, pl.z);
+  // 発見判定
+  let near=null, nd=1e9;
+  for(const m of G.finds){
+    m.rotation.z += dt*0.7;
+    const dd = m.userData.ground.distanceTo(G.player.position);
+    if(dd<nd){ nd=dd; near=m; }
+    m.userData.glow.material.opacity = (m.userData.done?0.3:0.55)+Math.sin(T*2.2+m.position.x)*0.12;
+  }
+  G.nearFind = (near && nd<8.5 && !near.userData.done) ? near : null;
+  if(near && nd<26) showLabel(near.userData.ground.clone().setY(near.userData.ground.y+7),
+    (near.userData.done?'記録済 ':'') + near.userData.rec.n + (G.nearFind? ' ［E］':''));
+  else hideLabel();
+  // HUD
+  const o = G.obj, all = (o.finds||[]).length, got = (o.finds||[]).filter(f=>has(o.id+':'+f.k)).length;
+  hud({ t:'SURFACE ─ 地表', l1:'天体', v1:o.name,
+    l2:'重力', v2:(G.grav/21).toFixed(2)+' G',
+    l3:'発見', v3:got+' / '+all, bar: all? got/all*100 : 100 });
+  const acts = [];
+  if(G.nearFind) acts.push({l:'記録する', k:'E', f:()=>act('record')});
+  acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
+  acts.push({l:'船に戻る', k:'', f:()=>enterOrbit(CUR)});
+  setActions(acts);
+  setHint('<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影'
+    + (G.skyShot? ' ── <b style="color:var(--amber)">空に見えるものを撮ってみる</b>':''));
+}
+/* ===========================================================
+   UI と進行 — 星図・日誌・計器
+   =========================================================== */
+function bodyScore(b){
+  let got=0, total=0;
+  const add = k => { total++; if(has(k)) got++; };
+  add(b.id+':reach');
+  (b.obs||[]).forEach(o=>add(b.id+':'+o.k));
+  if(b.surf){ add(b.id+':land'); (b.finds||[]).forEach(f=>add(b.id+':'+f.k)); }
+  if(b.sat){ add(b.sat.id+':land'); (b.sat.finds||[]).forEach(f=>add(b.sat.id+':'+f.k)); }
+  return {got, total};
+}
+function totalScore(){
+  let g=0,t=0; BODIES.forEach(b=>{ const s=bodyScore(b); g+=s.got; t+=s.total; });
+  return { got:g, total:t, pct: t? Math.round(g/t*100):0 };
+}
+function updMapPct(){
+  const s = totalScore();
+  $('mapPct').textContent = s.pct+'%';
+  $('logPct').textContent = s.pct+'%';
+  $('logSub').textContent = s.got+' / '+s.total+' 項目・写真 '+SAVE.photos.length+' 枚';
+  if(!$('map').hidden) renderRail();
+}
+
+/* ── 計器表示 ─────────────────────────────── */
+function hudMode(m){
+  $('hud').hidden = false; $('title').hidden = true; $('map').hidden = true;
+  $('reticle').style.display = (m==='surface')? 'none':'block';
+}
+let hintCache='';
+function setHint(html){ if(html===hintCache) return; hintCache=html; $('hint').innerHTML=html; }
+let hudCache='';
+function hud(o){
+  const sig = o.t+o.l1+o.v1+o.l2+o.v2+o.l3+o.v3+Math.round(o.bar);
+  if(sig===hudCache) return; hudCache=sig;
+  $('navTitle').textContent = o.t;
+  $('nl1').textContent=o.l1; $('nv1').textContent=o.v1;
+  $('nl2').textContent=o.l2; $('nv2').textContent=o.v2;
+  $('nl3').textContent=o.l3; $('nv3').textContent=o.v3;
+  $('barI').style.width = clamp(o.bar,0,100)+'%';
+}
+let actSig = '';
+function setActions(list){
+  const sig = list.map(a=>a.l).join('|');
+  if(sig===actSig) return; actSig = sig;
+  const host = $('action'); host.innerHTML='';
+  list.forEach(a=>{
+    const b = document.createElement('button');
+    b.className = 'btn' + (a.k==='E'||a.k==='L' ? ' primary':'');
+    b.innerHTML = a.l + (a.k? ' <span style="opacity:.6;font-family:var(--mono);font-size:11px">['+a.k+']</span>':'');
+    b.addEventListener('click', ()=>{ a.f(); b.blur(); });
+    host.appendChild(b);
+  });
+}
+function toast(kind, name, text, dim){
+  const host = $('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast'+(dim?' dim':'');
+  el.innerHTML = '<div class="k">'+esc(kind)+'</div><div class="n">'+esc(name)+'</div>'
+    + (text? '<div class="d">'+esc(text)+'</div>':'');
+  host.appendChild(el);
+  while(host.children.length>3) host.removeChild(host.firstChild);
+  setTimeout(()=>{ el.style.transition='opacity .5s,transform .5s'; el.style.opacity='0'; el.style.transform='translateX(20px)';
+    setTimeout(()=>el.remove(), 520); }, dim? 2600:5600);
+}
+
+/* ── 星図 ─────────────────────────────────── */
+let SEL = 'moon';
+function renderRail(){
+  const rail = $('rail'); rail.innerHTML='';
+  ROUTE.forEach((id,i)=>{
+    const b = BY_ID[id], s = bodyScore(b);
+    const btn = document.createElement('button');
+    btn.className='stop'; btn.setAttribute('aria-current', id===SEL? 'true':'false');
+    const size = clamp(Math.round(b.rad*0.075)+9, 11, 30);
+    const done = s.got>=s.total;
+    btn.innerHTML =
+      '<div class="pct">'+(s.got? Math.round(s.got/s.total*100)+'%':'')+'</div>'
+      + '<div class="dot" style="width:'+size+'px;height:'+size+'px;background:#'+new THREE.Color(b.color).getHexString()
+      + (done?';box-shadow:0 0 0 2px var(--verdi),0 0 18px rgba(87,168,151,.5)':'')+'"></div>'
+      + '<div class="tick"></div>'
+      + '<div class="lbl">'+b.name+'</div>';
+    btn.style.paddingLeft = (i===0?0:Math.min(10+i*4,34))+'px';
+    btn.addEventListener('click', ()=>{ SEL=id; renderRail(); renderDetail(); });
+    rail.appendChild(btn);
+  });
+}
+function renderDetail(){
+  const b = BY_ID[SEL], s = bodyScore(b);
+  $('dKana').textContent = b.kana;
+  $('dName').textContent = b.name;
+  $('dMission').textContent = b.mission;
+  const play = b.type==='giant' ? '周回観測 ＋ '+b.sat.name+'に着陸'
+             : b.type==='star' ? '安全距離からの観測のみ'
+             : b.type==='port' ? '宇宙港を探索 ＋ 軌道から地球を撮る'
+             : (b.rover? '探査車で走行 ＋ 発見':'低重力で歩行 ＋ 発見');
+  $('dStats').innerHTML =
+      '<dt>太陽から</dt><dd>'+b.au+'</dd>'
+    + '<dt>重力</dt><dd>'+b.grav+'</dd>'
+    + '<dt>航行距離</dt><dd>'+(b.cruise/100).toFixed(0)+' 光分（ゲーム内縮尺）</dd>'
+    + '<dt>遊び方</dt><dd style="font-family:var(--ui)">'+play+'</dd>'
+    + '<dt>記録</dt><dd>'+s.got+' / '+s.total+'</dd>';
+  const st = $('dStamp');
+  if(s.got>=s.total){ st.className='stamp on'; st.textContent='記録完了'; }
+  else if(has(b.id+':reach')){ st.className='stamp on'; st.textContent='到達済み'; }
+  else { st.className='stamp off'; st.textContent='未到達'; }
+  $('btnGo').textContent = has(b.id+':reach') ? b.name+'へ再訪' : b.name+'へ出発';
+}
+function openMap(){
+  if(MODE!=='attract') buildAttract();
+  $('hud').hidden=true; $('title').hidden=true; $('descend').hidden=true; $('map').hidden=false;
+  hideLabel(); actSig=''; $('action').innerHTML='';
+  renderRail(); renderDetail(); updMapPct();
+}
+
+/* ── 航海日誌 ─────────────────────────────── */
+function toggleLog(){
+  const l = $('log');
+  if(l.hidden){ renderLog(); l.hidden=false; } else l.hidden=true;
+}
+function renderLog(){
+  const host = $('logEntries'); host.innerHTML='';
+  ROUTE.forEach(id=>{
+    const b = BY_ID[id], s = bodyScore(b);
+    const e = document.createElement('div'); e.className='entry';
+    let items = '';
+    const row = (k, label, text, tag) => {
+      const on = has(k);
+      items += '<li class="'+(on?'':'un')+'"><span class="mk">'+(on?'✓':'—')+'</span><span>'
+        + (on? '<b>'+label+'</b>'+(text? '<br>'+text:'') : '<span>'+(tag||'未記入')+'</span>')+'</span></li>';
+    };
+    row(b.id+':reach','到達','','未到達');
+    (b.obs||[]).forEach(o=>row(b.id+':'+o.k, o.n, o.t));
+    if(b.surf){ row(b.id+':land','着陸','','未着陸'); (b.finds||[]).forEach(f=>row(b.id+':'+f.k, f.n, f.t)); }
+    if(b.sat){ row(b.sat.id+':land', b.sat.name+'に着陸','','未着陸');
+      (b.sat.finds||[]).forEach(f=>row(b.sat.id+':'+f.k, f.n, f.t)); }
+    e.innerHTML = '<div class="eh"><h4>'+b.name+'</h4><div class="st">'+s.got+' / '+s.total+'</div></div><ul>'+items+'</ul>';
+    host.appendChild(e);
+  });
+  const sh = $('logShots');
+  if(SAVE.photos.length){
+    sh.hidden=false;
+    sh.innerHTML = SAVE.photos.map(p=>{
+      const src = (typeof p.u==='string' && p.u.indexOf('data:image/')===0) ? p.u : '';
+      if(!src) return '';
+      return '<div class="shotwrap"><img src="'+src+'" alt="'+esc(p.n)+'で撮影した写真"><span>'+esc(p.n)+' ・ '+esc(p.d)+'</span></div>';
+    }).join('');
+  } else sh.hidden = true;
+}
+
+/* ── 起動 ─────────────────────────────────── */
+function startEngine(){
+  try{
+    if(!window.THREE){
+      $('loadMsg').textContent = '描画機関を読み込めなかった。再読み込みを。';
+      return;
+    }
+    initEngine();
+    buildAttract();
+    $('loading').hidden = true;
+    $('title').hidden = false;
+    updMapPct();
+  }catch(err){
+    $('loadMsg').textContent = '起動に失敗した：'+(err&&err.message? err.message:'原因不明');
+    console.error(err);
+  }
+}
+function boot(){
+  loadSave();
+  if(loadMute()) Audio2.on = false;
+  syncMuteBtn();
+  let errShown = false;
+  window.addEventListener('error', function(ev){
+    if(errShown) return; errShown = true;
+    const m = (ev && ev.message) ? ev.message : '不明なエラー';
+    const ld = $('loading');
+    if(ld && !ld.hidden) $('loadMsg').textContent = '起動に失敗した：' + m;
+    else { try{ toast('不具合', 'エラーが出た', m, false); }catch(e){} }
+  });
+  startEngine();
+  const bindTapBtn = (id, fn) => {
+    const el = $(id); if(!el) return;
+    el.addEventListener('pointerdown', e=>{
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      e.preventDefault();
+      try{ el.setPointerCapture(e.pointerId); }catch(_){}
+      el.classList.add('pressed');
+      if(navigator.vibrate) navigator.vibrate(15);
+      unlockAudio();
+      fn(e);
+    }, {passive:false});
+    const up = ()=>el.classList.remove('pressed');
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+  };
+  bindTapBtn('btnStart', ()=>{ Audio2.init(); Audio2.ambience(58,0.055); openMap(); });
+  bindTapBtn('btnLog0', toggleLog);
+  bindTapBtn('btnLog1', toggleLog);
+  bindTapBtn('btnLog2', toggleLog);
+  bindTapBtn('btnLogX', toggleLog);
+  bindTapBtn('btnMap2', openMap);
+  bindTapBtn('btnGo', ()=>{
+    Audio2.init();
+    $('map').hidden = true;
+    startCruise(SEL);
+  });
+  $('log').addEventListener('click', e=>{ if(e.target===$('log')) toggleLog(); });
+}
+boot();
+
+</script>
+</body>
+</html>
