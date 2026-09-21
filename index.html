@@ -67,8 +67,7 @@
   #game{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2}
   #game .layer, #game #toasts, #game #flash{pointer-events:none}
   #game #title, #game #map, #game #log, #game #loading{pointer-events:auto}
-  #map, #log{touch-action:pan-y; -webkit-overflow-scrolling:touch}
-  .rail{touch-action:pan-x}
+  #map, #log, .pick{touch-action:pan-y; -webkit-overflow-scrolling:touch}
 
   #control-deck.fc-control-deck{
     flex:0 0 25%; height:25%; min-height:0;
@@ -128,34 +127,58 @@
   @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 
   /* ── 星図 ──────────────────────────────── */
-  #map{background:linear-gradient(180deg,rgba(6,8,18,.9),rgba(6,8,18,.97));overflow-y:auto}
-  #map .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  #map h2{font-family:var(--disp);font-size:clamp(20px,4vw,27px);margin:4px 0 0;letter-spacing:.14em;font-weight:500}
-  #map .prog{font-family:var(--mono);font-size:12px;color:var(--star-dim);letter-spacing:.1em}
-  #map .prog b{color:var(--amber);font-size:17px;font-weight:500}
-  .rail{margin:20px 0 14px;overflow-x:auto;overflow-y:hidden;padding-bottom:10px;scrollbar-width:thin}
-  .rail-in{display:flex;align-items:flex-end;gap:0;min-width:max-content;position:relative;padding:34px 6px 0}
-  .rail-in::before{content:"";position:absolute;left:0;right:0;bottom:22px;height:1px;
-    background:linear-gradient(90deg,rgba(232,163,61,.55),rgba(207,226,244,.16))}
-  .stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 6px;
-        background:none;min-width:56px;min-height:48px}
-  .stop .dot{border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;transition:.2s}
-  .stop .lbl{font-size:11.5px;color:var(--star-dim);letter-spacing:.08em;white-space:nowrap;transition:.2s}
-  .stop .pct{font-family:var(--mono);font-size:9.5px;color:rgba(232,163,61,.75);height:11px}
-  .stop:hover .lbl,.stop[aria-current="true"] .lbl{color:#fff}
-  .stop:hover .dot{transform:scale(1.18)}
-  .stop[aria-current="true"] .dot{box-shadow:0 0 0 2px var(--amber),0 0 22px rgba(232,163,61,.5)}
-  .stop .tick{width:1px;height:12px;background:var(--line-soft)}
+  #map{background:linear-gradient(180deg,rgba(6,8,18,.9),rgba(6,8,18,.97));overflow:hidden;min-height:0}
+  #map .head{flex:0 0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  #map h2{font-family:var(--disp);font-size:clamp(18px,4.6vw,24px);margin:2px 0 0;letter-spacing:.14em;font-weight:500}
+  #map .head-side{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  #map .head-side .btn.ghost{min-height:40px;padding:6px 12px;font-size:12px}
+  #map .prog{font-family:var(--mono);font-size:11px;color:var(--star-dim);letter-spacing:.1em}
+  #map .prog b{color:var(--amber);font-size:16px;font-weight:500}
+  .pick{
+    flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+    margin:10px 0 8px; padding:2px 1px 6px; overscroll-behavior:contain; scrollbar-width:thin;
+  }
+  .pick-item{
+    display:flex; align-items:center; gap:10px; min-width:0; min-height:52px;
+    padding:8px 10px; text-align:left; border:1px solid var(--line-soft);
+    background:rgba(12,18,36,.78); color:var(--star); letter-spacing:.04em;
+    transition:transform .08s ease, opacity .08s ease, border-color .08s ease, background .08s ease;
+  }
+  .pick-item:hover{border-color:var(--amber); background:rgba(232,163,61,.1)}
+  .pick-item:active, .pick-item.pressed{transform:scale(0.96); opacity:.9}
+  .pick-item[aria-current="true"]{
+    border-color:var(--amber); background:rgba(232,163,61,.16);
+    box-shadow:0 0 0 1px rgba(232,163,61,.35);
+  }
+  .pick-item .dot{
+    flex:0 0 auto; width:18px; height:18px; border-radius:50%;
+    box-shadow:0 0 0 1px rgba(255,255,255,.16) inset;
+  }
+  .pick-item[aria-current="true"] .dot{box-shadow:0 0 0 2px var(--amber),0 0 12px rgba(232,163,61,.45)}
+  .pick-item.done .dot{box-shadow:0 0 0 2px var(--verdi)}
+  .pick-item .nm{
+    flex:1 1 auto; min-width:0; font-size:14px; color:#e8f0f8;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .pick-item[aria-current="true"] .nm{color:#fff}
+  .pick-item .pct{flex:0 0 auto; font-family:var(--mono); font-size:10px; color:rgba(232,163,61,.8)}
 
-  #detail{display:grid;grid-template-columns:1.25fr .85fr;gap:18px;border:1px solid var(--line);
-    background:linear-gradient(140deg,rgba(12,18,36,.92),rgba(6,8,18,.86));padding:18px 20px;flex:0 0 auto}
-  #detail h3{font-family:var(--disp);font-size:24px;margin:6px 0 2px;letter-spacing:.1em;font-weight:500}
-  #detail .kana{font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;color:var(--amber);opacity:.8}
-  #detail .mission{font-size:13.5px;line-height:1.95;color:#c3d3e4;margin:12px 0 0;max-width:34em}
-  #detail dl{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:12.5px}
-  #detail dt{color:var(--star-dim);letter-spacing:.06em}
-  #detail dd{margin:0;font-family:var(--mono);color:#e4eef8}
-  #detail .go{margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  #detail{
+    flex:0 0 auto; display:flex; flex-direction:column; gap:2px;
+    border:1px solid var(--line);
+    background:linear-gradient(140deg,rgba(12,18,36,.92),rgba(6,8,18,.86));
+    padding:10px 14px 12px; min-height:0;
+  }
+  #detail h3{font-family:var(--disp);font-size:clamp(18px,5vw,22px);margin:2px 0 0;letter-spacing:.1em;font-weight:500}
+  #detail .kana{font-family:var(--mono);font-size:10px;letter-spacing:.28em;color:var(--amber);opacity:.8}
+  #detail .mission{
+    font-size:12.5px; line-height:1.65; color:#c3d3e4; margin:6px 0 0;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden;
+  }
+  #detail .meta{margin:6px 0 0; font-size:11.5px; font-family:var(--mono); color:var(--star-dim); letter-spacing:.04em}
+  #detail .go{margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  #detail .go .btn.primary{flex:1 1 140px}
   .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.14em;border:1px solid;padding:3px 7px;white-space:nowrap}
   .stamp.on{color:var(--verdi);border-color:rgba(87,168,151,.5)}
   .stamp.off{color:rgba(139,163,189,.55);border-color:var(--line-soft)}
@@ -259,9 +282,30 @@
   @keyframes spin{to{transform:rotate(360deg)}}
 
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  @media (max-height:640px){
+    #detail .mission{-webkit-line-clamp:1; margin-top:4px}
+    #detail .meta{margin-top:4px}
+    #detail{padding:8px 12px 10px}
+    #detail .go{margin-top:8px}
+  }
+  @media (min-width:640px){
+    .pick{grid-template-columns:repeat(5,1fr)}
+  }
+  @media (max-height:520px){
+    .pick{grid-template-columns:repeat(5,1fr); gap:6px; margin:4px 0 6px}
+    .pick-item{min-height:48px; padding:6px 8px; gap:8px}
+    .pick-item .pct{display:none}
+    #map .head{margin:0}
+    #detail{
+      flex-direction:row; align-items:center; gap:12px;
+      padding:8px 12px;
+    }
+    #detail .kana, #detail .mission, #detail .meta{display:none}
+    #detail h3{font-size:18px; margin:0; white-space:nowrap}
+    #detail .go{margin-top:0; flex:1 1 auto; justify-content:flex-end; flex-wrap:nowrap}
+    #detail .go .btn.primary{flex:1 1 160px; max-width:280px}
+  }
   @media (max-width:640px){
-    #detail{grid-template-columns:1fr;gap:12px;padding:14px 15px}
-    #detail h3{font-size:20px}
     #hint{display:block;font-size:11px;bottom:6px}
     #action{bottom:40px}
     #navBox{min-width:0;max-width:58%;padding:7px 10px;font-size:10.5px}
@@ -330,21 +374,23 @@
   <div class="layer pad" id="map" hidden data-scrollable>
     <div class="head">
       <div><div class="eyebrow">STAR CHART ─ 星図</div><h2>行き先を選ぶ</h2></div>
-      <div class="prog">航海達成率 <b id="mapPct">0%</b></div>
+      <div class="head-side">
+        <div class="prog">航海達成率 <b id="mapPct">0%</b></div>
+        <button class="btn ghost" id="btnLog1">日誌</button>
+      </div>
     </div>
-    <div class="rail"><div class="rail-in" id="rail"></div></div>
+    <div class="pick" id="rail" role="listbox" aria-label="行き先"></div>
     <div id="detail">
       <div>
-        <div class="kana" id="dKana">EARTH</div>
-        <h3 id="dName">地球</h3>
+        <div class="kana" id="dKana">LUNA</div>
+        <h3 id="dName">月</h3>
         <p class="mission" id="dMission"></p>
-        <div class="go">
-          <button class="btn primary" id="btnGo">出発</button>
-          <button class="btn ghost" id="btnLog1">日誌を見る</button>
-          <span class="stamp off" id="dStamp">未到達</span>
-        </div>
+        <p class="meta" id="dStats"></p>
       </div>
-      <dl id="dStats"></dl>
+      <div class="go">
+        <button class="btn primary" id="btnGo">月へ出発</button>
+        <span class="stamp off" id="dStamp">未到達</span>
+      </div>
     </div>
   </div>
 
@@ -1243,6 +1289,33 @@ function onPtr(el, fn){
   el.addEventListener('pointercancel', up);
   el.addEventListener('lostpointercapture', up);
 }
+function onPtrTap(el, fn){
+  if(!el) return;
+  let sx=0, sy=0, pid=null, moved=false;
+  el.addEventListener('pointerdown', e=>{
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    pid=e.pointerId; sx=e.clientX; sy=e.clientY; moved=false;
+    el.classList.add('pressed');
+    if(navigator.vibrate) navigator.vibrate(12);
+    unlockAudio();
+  });
+  el.addEventListener('pointermove', e=>{
+    if(e.pointerId!==pid) return;
+    if(Math.abs(e.clientX-sx)>14 || Math.abs(e.clientY-sy)>14){
+      moved=true; el.classList.remove('pressed');
+    }
+  });
+  el.addEventListener('pointerup', e=>{
+    if(e.pointerId!==pid) return;
+    el.classList.remove('pressed');
+    const fire=!moved; pid=null; moved=false;
+    if(fire) fn(e);
+  });
+  el.addEventListener('pointercancel', e=>{
+    if(e.pointerId!==pid) return;
+    el.classList.remove('pressed'); pid=null; moved=false;
+  });
+}
 
 function initEngine(){
   const host = $('screen-wrap');
@@ -1391,7 +1464,7 @@ function bindInput(){
 
   let lastTouchEnd = 0;
   document.addEventListener('touchmove', e=>{
-    if(e.target.closest('[data-scrollable], #map, #log, .rail')) return;
+    if(e.target.closest('[data-scrollable], #map, #log, .pick')) return;
     e.preventDefault();
   }, {passive:false});
   document.addEventListener('touchend', e=>{
@@ -2341,25 +2414,42 @@ function toast(kind, name, text, dim){
 /* ── 星図 ─────────────────────────────────── */
 let SEL = 'moon';
 function renderRail(){
-  const rail = $('rail'); rail.innerHTML='';
-  ROUTE.forEach((id,i)=>{
+  const host = $('rail');
+  if(host.dataset.ready !== '1'){
+    host.textContent = '';
+    ROUTE.forEach(id=>{
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pick-item';
+      btn.dataset.id = id;
+      btn.setAttribute('role', 'option');
+      const dot = document.createElement('span'); dot.className = 'dot';
+      const nm = document.createElement('span'); nm.className = 'nm';
+      const pct = document.createElement('span'); pct.className = 'pct';
+      btn.appendChild(dot); btn.appendChild(nm); btn.appendChild(pct);
+      onPtrTap(btn, ()=>{
+        SEL = id;
+        renderRail();
+        renderDetail();
+        btn.scrollIntoView({block:'nearest', inline:'nearest'});
+      });
+      host.appendChild(btn);
+    });
+    host.dataset.ready = '1';
+  }
+  ROUTE.forEach(id=>{
     const b = BY_ID[id], s = bodyScore(b);
-    const btn = document.createElement('button');
-    btn.type='button';
-    btn.className='stop';
+    const btn = host.querySelector('[data-id="'+id+'"]');
+    if(!btn) return;
+    const done = s.got >= s.total;
+    btn.classList.toggle('done', done);
     if(id===SEL) btn.setAttribute('aria-current','true');
     else btn.removeAttribute('aria-current');
-    const size = clamp(Math.round(b.rad*0.075)+9, 11, 30);
-    const done = s.got>=s.total;
-    btn.innerHTML =
-      '<div class="pct">'+(s.got? Math.round(s.got/s.total*100)+'%':'')+'</div>'
-      + '<div class="dot" style="width:'+size+'px;height:'+size+'px;background:#'+new THREE.Color(b.color).getHexString()
-      + (done?';box-shadow:0 0 0 2px var(--verdi),0 0 18px rgba(87,168,151,.5)':'')+'"></div>'
-      + '<div class="tick"></div>'
-      + '<div class="lbl">'+b.name+'</div>';
-    btn.style.paddingLeft = (i===0?0:Math.min(10+i*4,34))+'px';
-    onPtr(btn, ()=>{ SEL=id; renderRail(); renderDetail(); });
-    rail.appendChild(btn);
+    btn.setAttribute('aria-selected', id===SEL ? 'true' : 'false');
+    btn.querySelector('.dot').style.background = '#'+new THREE.Color(b.color).getHexString();
+    btn.querySelector('.nm').textContent = b.name;
+    btn.querySelector('.pct').textContent = s.got ? Math.round(s.got/s.total*100)+'%' : '';
+    btn.setAttribute('aria-label', b.name+(done?' 記録完了': s.got? ' 記録'+Math.round(s.got/s.total*100)+'%':' 未到達'));
   });
 }
 function renderDetail(){
@@ -2371,12 +2461,7 @@ function renderDetail(){
              : b.type==='star' ? '安全距離からの観測のみ'
              : b.type==='port' ? '宇宙港を探索 ＋ 軌道から地球を撮る'
              : (b.rover? '探査車で走行 ＋ 発見':'低重力で歩行 ＋ 発見');
-  $('dStats').innerHTML =
-      '<dt>太陽から</dt><dd>'+b.au+'</dd>'
-    + '<dt>重力</dt><dd>'+b.grav+'</dd>'
-    + '<dt>航行距離</dt><dd>'+(b.cruise/100).toFixed(0)+' 光分（ゲーム内縮尺）</dd>'
-    + '<dt>遊び方</dt><dd style="font-family:var(--ui)">'+play+'</dd>'
-    + '<dt>記録</dt><dd>'+s.got+' / '+s.total+'</dd>';
+  $('dStats').textContent = play+' ／ 記録 '+s.got+' / '+s.total;
   const st = $('dStamp');
   if(s.got>=s.total){ st.className='stamp on'; st.textContent='記録完了'; }
   else if(has(b.id+':reach')){ st.className='stamp on'; st.textContent='到達済み'; }
@@ -2388,6 +2473,8 @@ function openMap(){
   $('hud').hidden=true; $('title').hidden=true; $('descend').hidden=true; $('map').hidden=false;
   hideLabel(); actSig=''; $('action').innerHTML='';
   renderRail(); renderDetail(); updMapPct();
+  const cur = $('rail').querySelector('[aria-current="true"]');
+  if(cur) cur.scrollIntoView({block:'nearest'});
 }
 
 /* ── 航海日誌 ─────────────────────────────── */
