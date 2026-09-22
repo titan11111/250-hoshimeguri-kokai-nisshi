@@ -1,53 +1,64 @@
-/* FC iOS Controller — 画面下25%専用・コピペ可（Press Start 2P 前提） */
+/* FC iOS Controller — 画面下25%専用・ファミコン実機の配置（B A 横並び／SELECT START は沈んだプレート）
+   2026-09-22 作り直し: 筐体・受け皿・十字の立体を追加。当たり判定は見た目より広い（::before で拡張）。 */
 :root {
-  --fc-shell: #c8c8c8;
-  --fc-shell-lo: #a8a8a8;
-  --fc-shell-line: #707070;
-  --fc-dpad: #2a2a2a;
-  --fc-dpad-hi: #454545;
-  --fc-dpad-lo: #181818;
-  --fc-a: #e83800;
-  --fc-a-lo: #a82800;
-  --fc-b: #f8b800;
-  --fc-b-lo: #c89000;
-  --fc-sys: #505050;
-  --fc-sys-lo: #303030;
-  --fc-label: #1a1a1a;
+  --fc-shell: #d2cec4;
+  --fc-shell-mid: #b8b3a8;
+  --fc-shell-lo: #9a958b;
+  --fc-shell-line: #5e5a52;
+  --fc-well: #8e8981;
+  --fc-well-lo: #6e6a63;
+  --fc-dpad: #2b2b2b;
+  --fc-dpad-hi: #4b4b4b;
+  --fc-dpad-lo: #121212;
+  --fc-a: #d92b1c;
+  --fc-a-hi: #ff6a52;
+  --fc-a-lo: #8c1408;
+  --fc-b: #d92b1c;
+  --fc-b-hi: #ff6a52;
+  --fc-b-lo: #8c1408;
+  --fc-sys: #56524b;
+  --fc-sys-lo: #302d28;
+  --fc-label: #2a2722;
 }
 
+/* ───────────── 筐体 ───────────── */
 .fc-control-deck {
   position: relative;
   flex: 0 0 25%;
   height: 25%;
   min-height: 0;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: space-between;
-  gap: clamp(4px, 1.5vw, 10px);
+  gap: clamp(4px, 1.2vw, 10px);
   padding:
-    6px
-    max(8px, env(safe-area-inset-right, 8px))
-    max(6px, env(safe-area-inset-bottom, 6px))
-    max(8px, env(safe-area-inset-left, 8px));
-  background: linear-gradient(180deg, var(--fc-shell) 0%, var(--fc-shell-lo) 100%);
+    clamp(6px, 1.6vh, 12px)
+    max(10px, env(safe-area-inset-right, 10px))
+    max(8px, env(safe-area-inset-bottom, 8px))
+    max(10px, env(safe-area-inset-left, 10px));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0 2px, transparent 2px),
+    linear-gradient(180deg, var(--fc-shell) 0%, var(--fc-shell-mid) 62%, var(--fc-shell-lo) 100%);
   border-top: 3px solid var(--fc-shell-line);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.22);
   overflow: hidden;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* 筐体の梨地（実機の樹脂質感） */
 .fc-control-deck::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent,
-    transparent 3px,
-    rgba(0, 0, 0, 0.025) 3px,
-    rgba(0, 0, 0, 0.025) 4px
-  );
+  background:
+    repeating-linear-gradient(90deg, transparent 0 3px, rgba(0, 0, 0, 0.022) 3px 4px),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, 0.02) 3px 4px);
 }
 
 .fc-deck-left,
@@ -62,40 +73,59 @@
 }
 
 .fc-deck-left {
-  flex: 1 1 38%;
-  justify-content: flex-start;
+  flex: 1 1 34%;
+  justify-content: center;
 }
 
 .fc-deck-center {
   flex: 0 0 auto;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
-  padding: 0 2px;
+  gap: clamp(5px, 1.2vh, 9px);
+  padding: clamp(6px, 1.4vh, 10px) clamp(7px, 2vw, 12px);
+  border-radius: 10px;
+  /* SELECT/START は筐体に一段沈んだプレートに載る */
+  background: linear-gradient(180deg, var(--fc-well-lo), var(--fc-well));
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
 .fc-deck-right {
-  flex: 1 1 38%;
-  justify-content: flex-end;
+  flex: 1 1 34%;
+  justify-content: center;
 }
 
-/* ---- 十字キー（ファミコン十字型） ---- */
+/* ───────────── 十字キー ───────────── */
 .fc-dpad-wrap {
-  width: min(42vw, calc(25dvh - 18px), 168px);
-  height: min(42vw, calc(25dvh - 18px), 168px);
-  min-width: 120px;
-  min-height: 120px;
+  position: relative;
+  width: min(40vw, calc(25dvh - 26px), 152px);
+  height: min(40vw, calc(25dvh - 26px), 152px);
+  min-width: 104px;
+  min-height: 104px;
   display: grid;
   place-items: center;
   touch-action: none;
+  /* 受け皿：十字が沈んで見えるよう円形に窪ませる */
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, var(--fc-well-lo), var(--fc-well) 72%, transparent 73%);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 当たり判定を見た目より広げる（誤タップより取りこぼしを潰す） */
+.fc-dpad-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
 }
 
 .fc-dpad {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 86%;
+  height: 86%;
   touch-action: none;
-  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.5));
 }
 
 .fc-dpad-v,
@@ -103,107 +133,147 @@
   position: absolute;
   border: 2px solid var(--fc-dpad-lo);
   background: linear-gradient(180deg, var(--fc-dpad-hi), var(--fc-dpad));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .fc-dpad-v {
-  width: 36%;
+  width: 35%;
   height: 100%;
-  left: 32%;
+  left: 32.5%;
   top: 0;
+  border-radius: 4px 4px 4px 4px;
 }
 
 .fc-dpad-h {
   width: 100%;
-  height: 36%;
+  height: 35%;
   left: 0;
-  top: 32%;
+  top: 32.5%;
+  border-radius: 4px;
 }
 
+/* 中央の皿（親指が乗る凹み）＋ 方向のガイド刻み */
 .fc-dpad-c {
   position: absolute;
   left: 30%;
   top: 30%;
   width: 40%;
   height: 40%;
+  border-radius: 50%;
   border: 2px solid var(--fc-dpad-lo);
-  background: radial-gradient(circle at 35% 28%, #555, var(--fc-dpad-lo));
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.07) 0 22%, transparent 23%),
+    radial-gradient(circle at 38% 30%, #5c5c5c, var(--fc-dpad-lo));
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.6);
   pointer-events: none;
 }
 
+/* 押下表現はクラス／属性の付替えのみ（再描画ゼロ） */
 .fc-dpad[data-up="1"] .fc-dpad-v {
-  background: linear-gradient(0deg, #666, var(--fc-dpad-hi));
-  box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(0deg, #6b6b6b, var(--fc-dpad-hi));
+  box-shadow: inset 0 5px 9px rgba(0, 0, 0, 0.5);
 }
 
 .fc-dpad[data-down="1"] .fc-dpad-v {
-  background: linear-gradient(180deg, #666, var(--fc-dpad-hi));
-  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(180deg, #6b6b6b, var(--fc-dpad-hi));
+  box-shadow: inset 0 -5px 9px rgba(0, 0, 0, 0.5);
 }
 
 .fc-dpad[data-left="1"] .fc-dpad-h {
-  background: linear-gradient(90deg, #666, var(--fc-dpad-hi));
-  box-shadow: inset 4px 0 8px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(90deg, #6b6b6b, var(--fc-dpad-hi));
+  box-shadow: inset 5px 0 9px rgba(0, 0, 0, 0.5);
 }
 
 .fc-dpad[data-right="1"] .fc-dpad-h {
-  background: linear-gradient(270deg, #666, var(--fc-dpad-hi));
-  box-shadow: inset -4px 0 8px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(270deg, #6b6b6b, var(--fc-dpad-hi));
+  box-shadow: inset -5px 0 9px rgba(0, 0, 0, 0.5);
 }
 
 .fc-dpad.pressed {
-  transform: scale(0.98);
-  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45)) brightness(1.05);
+  transform: translateY(1px) scale(0.985);
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)) brightness(1.04);
 }
 
-/* ---- SELECT / START ---- */
+/* ───────────── SELECT / START ───────────── */
 .fc-sysbtn {
   position: relative;
-  width: clamp(52px, 14vw, 68px);
-  height: clamp(22px, 6.5vw, 28px);
-  min-width: 48px;
-  min-height: 22px;
+  width: clamp(54px, 15vw, 72px);
+  height: clamp(20px, 5.6vw, 26px);
+  min-width: 50px;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--fc-sys), var(--fc-sys-lo));
-  box-shadow: 0 2px 0 #111, inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  color: #ddd;
+  background: transparent;
+  isolation: isolate;
+  color: #e6e2da;
   font-family: "Press Start 2P", monospace;
-  font-size: clamp(5px, 1.8vw, 7px);
+  font-size: clamp(5px, 1.7vw, 7px);
   letter-spacing: 0.04em;
   line-height: 1;
   touch-action: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+}
+
+/* 判定はbutton本体の48px。細い実機風の外観だけを中央に描く。 */
+.fc-sysbtn::before {
+  content: "";
+  position: absolute;
+  inset: 12px 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--fc-sys), var(--fc-sys-lo));
+  box-shadow: 0 2px 0 #14120f, inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .fc-sysbtn:active,
 .fc-sysbtn.pressed {
   transform: translateY(2px);
-  box-shadow: 0 0 0 #111, inset 0 2px 4px rgba(0, 0, 0, 0.45);
 }
 
-/* ---- A / B（ファミコン配色・斜め配置） ---- */
+.fc-sysbtn:active::before,
+.fc-sysbtn.pressed::before {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.55);
+}
+
+/* ───────────── A / B（実機どおり B A の横並び） ───────────── */
 .fc-ab {
   position: relative;
-  width: min(46vw, calc(25dvh - 10px), 188px);
-  height: min(46vw, calc(25dvh - 10px), 188px);
-  min-width: 128px;
-  min-height: 128px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  /* 実機の受け皿：角丸の窪みに2個並ぶ */
+  gap: clamp(10px, 3.4vw, 20px);
+  padding: clamp(7px, 2vw, 12px) clamp(11px, 3.4vw, 18px);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--fc-well-lo), var(--fc-well));
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
 .fc-abbtn {
-  position: absolute;
-  width: clamp(56px, 16vw, 72px);
-  height: clamp(56px, 16vw, 72px);
+  position: relative;
+  width: clamp(50px, 13.5vw, 66px);
+  height: clamp(50px, 13.5vw, 66px);
   min-width: 48px;
   min-height: 48px;
   padding: 0;
-  border: 3px solid rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(0, 0, 0, 0.42);
   border-radius: 50%;
   touch-action: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  background: radial-gradient(circle at 36% 28%, var(--fc-a-hi), var(--fc-a) 56%, var(--fc-a-lo));
+  box-shadow: 0 5px 0 var(--fc-a-lo), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+}
+
+/* 当たり判定は円形に少しだけ外へ。A と B の間は広げてあるので相互の誤爆はしない */
+.fc-abbtn::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
 }
 
 .fc-abbtn i {
@@ -212,57 +282,46 @@
   display: grid;
   place-items: center;
   font-family: "Press Start 2P", monospace;
-  font-size: clamp(11px, 3.4vw, 14px);
+  font-size: clamp(11px, 3.2vw, 14px);
   font-style: normal;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.22);
   pointer-events: none;
-}
-
-.fc-abbtn-a {
-  right: 0;
-  top: 8%;
-  background: radial-gradient(circle at 35% 28%, #ff6a40, var(--fc-a) 55%, var(--fc-a-lo));
-  box-shadow: 0 5px 0 #5a1800, inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.fc-abbtn-b {
-  left: 0;
-  bottom: 8%;
-  background: radial-gradient(circle at 35% 28%, #ffe060, var(--fc-b) 55%, var(--fc-b-lo));
-  box-shadow: 0 5px 0 #6a4a00, inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .fc-abbtn:active,
 .fc-abbtn.pressed {
-  transform: translateY(4px) scale(0.96);
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--fc-a-lo), inset 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-.fc-abbtn-a:active,
-.fc-abbtn-a.pressed {
-  box-shadow: 0 1px 0 #5a1800, inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-
-.fc-abbtn-b:active,
-.fc-abbtn-b.pressed {
-  box-shadow: 0 1px 0 #6a4a00, inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-
+/* ───────────── 小画面 ───────────── */
 @media (max-width: 360px) {
   .fc-deck-center {
-    gap: 6px;
+    gap: 5px;
+    padding: 6px 7px;
   }
 
   .fc-sysbtn {
-    width: 48px;
-    height: 20px;
+    width: 50px;
+    height: 19px;
     font-size: 5px;
+  }
+
+  .fc-ab {
+    gap: 9px;
+    padding: 6px 9px;
   }
 }
 
 @media (max-height: 620px) {
-  .fc-dpad-wrap,
-  .fc-ab {
-    min-width: 108px;
-    min-height: 108px;
+  .fc-dpad-wrap {
+    min-width: 94px;
+    min-height: 94px;
+  }
+
+  .fc-abbtn {
+    width: 48px;
+    height: 48px;
   }
 }

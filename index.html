@@ -66,34 +66,49 @@
   }
   #game{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:2}
   #game .layer, #game #toasts, #game #flash{pointer-events:none}
-  #game #title, #game #map, #game #log, #game #loading{pointer-events:auto}
+  /* ending は #game .layer の pointer-events:none を継いでボタンが押せなくなっていた（2026-09-22 修正） */
+  #game #title, #game #map, #game #log, #game #loading, #game #ending{pointer-events:auto}
+
+  /* ── コントローラのカーソル（選択を全部コントローラで行うため） ── */
+  .ui-focus{
+    position:relative;
+    border-color:var(--amber)!important;
+    box-shadow:0 0 0 2px rgba(232,163,61,.55), 0 0 18px rgba(232,163,61,.28);
+  }
+  .ui-focus::after{
+    content:"\25B6"; position:absolute; left:-15px; top:50%; transform:translateY(-50%);
+    font-size:10px; color:var(--amber); pointer-events:none;
+    animation:uiCaret 1s steps(2,end) infinite;
+  }
+  @keyframes uiCaret{0%,100%{opacity:1}50%{opacity:.25}}
+  .pick-item.ui-focus::after{left:2px}
+  /* 星図のカーソルは行そのものを光らせる（矢印はリストの内側に出す） */
+  .pick-item.ui-focus{background:rgba(232,163,61,.14)}
   #map, #log, .pick{touch-action:pan-y; -webkit-overflow-scrolling:touch}
 
   #control-deck.fc-control-deck{
     flex:0 0 25%; height:25%; min-height:0;
     padding-bottom:max(8px, env(safe-area-inset-bottom, 8px));
   }
-  #control-deck .fc-deck-left{justify-content:center}
-  #control-deck .fc-deck-right{justify-content:center}
-  #control-deck .fc-dpad-wrap,
-  #control-deck .fc-ab{
-    min-width:88px; min-height:88px;
-    width:min(28vw, calc(25dvh - 36px), 120px);
-    height:min(28vw, calc(25dvh - 36px), 120px);
+  #control-deck .fc-dpad-wrap{
+    min-width:96px; min-height:96px;
+    width:min(31vw, calc(25dvh - 24px), 132px);
+    height:min(31vw, calc(25dvh - 24px), 132px);
   }
   #control-deck .fc-sysbtn{
-    width:52px; height:48px; min-width:48px; min-height:48px;
-    font-size:9px; letter-spacing:.04em; border-radius:10px;
+    width:clamp(54px,15vw,70px); height:48px; min-height:48px; flex-shrink:0;
+    min-width:50px; font-size:clamp(5px,1.7vw,7px); border-radius:999px;
   }
   #control-deck .fc-abbtn{
-    width:clamp(48px, 12vw, 64px); height:clamp(48px, 12vw, 64px);
+    width:min(15vw, calc(25dvh - 66px), 64px);
+    height:min(15vw, calc(25dvh - 66px), 64px);
     min-width:48px; min-height:48px;
   }
-  #control-deck .fc-abbtn i{ transform:translateY(-5px); }
+  #control-deck .fc-abbtn i{ transform:translateY(-6px); }
   #control-deck .fc-cap{
-    position:absolute; left:0; right:0; bottom:7px; text-align:center;
-    font-size:8px; font-family:var(--ui); font-style:normal; color:rgba(0,0,0,.62);
-    letter-spacing:.04em; pointer-events:none;
+    position:absolute; left:0; right:0; bottom:6px; text-align:center;
+    font-size:8px; font-family:var(--ui); font-style:normal; color:rgba(0,0,0,.6);
+    letter-spacing:.02em; pointer-events:none; white-space:nowrap;
   }
 
   .layer{position:absolute;inset:0;display:flex;flex-direction:column}
@@ -281,6 +296,37 @@
     border-top-color:var(--amber);animation:spin 1.5s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
+  /* ── 船体強化 / 太陽系完遂 ───────────────── */
+  #shipStatus{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:#ffd17a;
+    border:1px solid rgba(232,163,61,.4);padding:5px 8px;background:rgba(6,8,18,.72);white-space:nowrap}
+  .pick-item.locked{filter:grayscale(.8);opacity:.46;border-style:dashed}
+  .pick-item.locked .dot{box-shadow:none}
+  #ending{z-index:35;justify-content:center;align-items:center;overflow:hidden;background:#090909;color:#f4f0df}
+  #ending::before{content:"";position:absolute;inset:-30%;background:
+    repeating-linear-gradient(117deg,transparent 0 22px,rgba(255,42,76,.13) 23px 26px),
+    radial-gradient(circle at 72% 28%,rgba(255,40,67,.35),transparent 30%),
+    radial-gradient(circle at 24% 75%,rgba(50,225,255,.18),transparent 34%);
+    animation:endSpin 13s linear infinite;mix-blend-mode:screen}
+  #ending::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.42;
+    background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.08) 4px 5px);
+    animation:endScan .16s steps(2) infinite}
+  .end-core{position:relative;z-index:2;width:min(690px,92vw);padding:28px 24px 24px;border:2px solid #f52b4d;
+    background:rgba(5,5,7,.88);box-shadow:14px 14px 0 #f52b4d,-10px -10px 0 rgba(40,220,255,.6);
+    transform:rotate(-1deg);text-align:left}
+  .end-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.26em;color:#31dff4;text-transform:uppercase}
+  #ending h2{font-family:var(--disp);font-size:clamp(30px,8vw,58px);line-height:1.08;letter-spacing:.08em;margin:10px 0;
+    text-shadow:3px 0 #f52b4d,-3px 0 #31dff4;animation:endGlitch 2.7s infinite}
+  .end-line{height:5px;background:#f52b4d;transform:skewX(-28deg);margin:14px 0}
+  .end-copy{font-size:13px;line-height:1.9;color:#d8d3c4;max-width:48em}
+  .end-signal{margin:18px 0;padding:12px 14px;border-left:5px solid #31dff4;background:#11151a;
+    font-family:var(--mono);font-size:12px;line-height:1.7;color:#fff;letter-spacing:.08em}
+  .end-signal b{color:#f52b4d}
+  .end-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  #btnEndMap{border-color:#f52b4d;background:#f52b4d;color:#080808;font-weight:800}
+  @keyframes endSpin{to{transform:rotate(360deg)}}
+  @keyframes endScan{50%{transform:translateY(2px)}}
+  @keyframes endGlitch{0%,88%,100%{transform:none}90%{transform:translateX(-5px) skewX(-5deg)}93%{transform:translateX(4px)}96%{transform:translateX(-2px)}}
+
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
   @media (max-height:640px){
     #detail .mission{-webkit-line-clamp:1; margin-top:4px}
@@ -333,13 +379,13 @@
       </div>
     </div>
     <div class="fc-deck-center">
-      <button type="button" class="fc-sysbtn" id="fc-btn-select" aria-label="加速">加速</button>
-      <button type="button" class="fc-sysbtn" id="fc-btn-start" aria-label="一時停止">停止</button>
+      <button type="button" class="fc-sysbtn" id="fc-btn-select" aria-label="戻る"><span id="fc-select-label">もどる</span></button>
+      <button type="button" class="fc-sysbtn" id="fc-btn-start" aria-label="一時停止"><span id="fc-start-label">停止</span></button>
     </div>
     <div class="fc-deck-right">
       <div class="fc-ab" aria-label="A B ボタン">
-        <button type="button" class="fc-abbtn fc-abbtn-b" id="fc-btn-b" aria-label="撮影"><i>B</i><span class="fc-cap">撮影</span></button>
-        <button type="button" class="fc-abbtn fc-abbtn-a" id="fc-btn-a" aria-label="記録"><i>A</i><span class="fc-cap">記録</span></button>
+        <button type="button" class="fc-abbtn fc-abbtn-b" id="fc-btn-b" aria-label="撮影"><i>B</i><span class="fc-cap" id="fc-b-label">撮影</span></button>
+        <button type="button" class="fc-abbtn fc-abbtn-a" id="fc-btn-a" aria-label="決定"><i>A</i><span class="fc-cap" id="fc-a-label">決定</span></button>
       </div>
     </div>
   </footer>
@@ -359,14 +405,14 @@
       <div class="eyebrow">A VOYAGE LOG OF THE NINE LIGHTS</div>
       <h1>星めぐり航海日誌</h1>
       <div class="rule" style="margin:0 auto;width:120px;background:linear-gradient(90deg,transparent,var(--amber),transparent)"></div>
-      <p class="sub">地球の宇宙港から船を出し、光の順に星をめぐる。<br>
-        急ぐ旅ではない。着いて、降りて、見て、書きとめる。<br>
-        日誌が埋まるころ、太陽系はもう他人の場所ではなくなっている。</p>
+      <p class="sub">科学の発展に必要な未知素材を求め、太陽系をめぐる。<br>
+        観測し、降りて、採取する。素材は船体を強くし、さらに遠い星への航路を開く。<br>
+        太陽系をすべて解き明かした先で、最後の通信が待っている。</p>
       <div class="acts">
         <button class="btn primary" id="btnStart">出港する</button>
         <button class="btn" id="btnLog0">航海日誌</button>
       </div>
-      <div class="ver">十字 ─ 移動 ・ A 記録/着陸 ・ B 撮影 ・ 加速 ・ 停止でポーズ</div>
+      <div class="ver">十字 ─ 移動 ・ A 決定/行動 ・ B 撮影 ・ SELECT 戻る ・ START ポーズ</div>
     </div>
   </div>
 
@@ -375,6 +421,7 @@
     <div class="head">
       <div><div class="eyebrow">STAR CHART ─ 星図</div><h2>行き先を選ぶ</h2></div>
       <div class="head-side">
+        <div id="shipStatus">船体 I / 素材 0</div>
         <div class="prog">航海達成率 <b id="mapPct">0%</b></div>
         <button class="btn ghost" id="btnLog1">日誌</button>
       </div>
@@ -435,6 +482,19 @@
         <div class="total">達成率<b id="logPct">0%</b><span id="logSub"></span></div>
       </div>
       <div class="body"><div class="entries" id="logEntries"></div><div class="shots" id="logShots" hidden></div></div>
+    </div>
+  </div>
+
+  <!-- 太陽系コンプリート後だけ現れる終幕 -->
+  <div class="layer pad" id="ending" hidden>
+    <div class="end-core">
+      <div class="end-kicker">SOLAR SYSTEM // 100% // HULL IV</div>
+      <h2>太陽系の先は、<br>やはり広かった。</h2>
+      <div class="end-line"></div>
+      <p class="end-copy">十の光から集めた素材は、船を壊れないものにした。人類の科学は、ようやく太陽の重力圏を越える。振り返れば、あれほど巨大だった太陽系が、暗闇に浮かぶ一粒の航路標識になっていた。</p>
+      <div class="end-signal">観測範囲：既知星図の <b>外側</b><br>光点数：計測不能<br>受信本文：『ここには、まだ名前のない星がある。』</div>
+      <p class="end-copy">広大だった。壮大だった。そして、ただ雄大だった。星と星の間には、科学でも日誌でも説明できない何かが静かに横切っている。十一番目の座標が点灯する。航海は、ここから始まる。</p>
+      <div class="end-actions"><button class="btn" id="btnEndLog">集めた証拠を見る</button><button class="btn" id="btnEndMap">境界の星図へ戻る</button></div>
     </div>
   </div>
 
@@ -766,6 +826,18 @@ function heightAt(x,z){
   const dc = Math.sqrt(x*x+z*z);
   if(dc < 26) h = lerp(h*0.12, h, clamp((dc-9)/17,0,1));
   return h;
+}
+
+/* 高さ場から地表法線を得る。描画メッシュと人物・車輪が同じ高さ関数を参照するため、
+   見た目だけ傾けるのではなく、実際の尾根やクレーターに沿って接地できる。 */
+const SURFACE_UP = new THREE.Vector3(0,1,0);
+function groundNormalAt(x,z, span){
+  const e = span || 0.85;
+  return new THREE.Vector3(
+    heightAt(x-e,z)-heightAt(x+e,z),
+    e*2,
+    heightAt(x,z-e)-heightAt(x,z+e)
+  ).normalize();
 }
 
 /* ── 素材：惑星テクスチャ ──────────────────────────
@@ -1273,8 +1345,20 @@ const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0},
 function usePadHint(){
   try{ return window.matchMedia('(pointer:coarse)').matches || window.innerWidth<=640; }catch(e){ return window.innerWidth<=640; }
 }
+/* ボタンの実処理を id で引ける台帳。タップとコントローラが同じ関数を呼ぶための一本化（2026-09-22） */
+const ACT_BY_ID = Object.create(null);
+function regAct(el, fn){ if(el && el.id) ACT_BY_ID[el.id] = fn; }
+function runAct(id){
+  const f = ACT_BY_ID[id];
+  if(!f) return false;
+  unlockAudio();
+  if(navigator.vibrate) navigator.vibrate(15);
+  f();
+  return true;
+}
 function onPtr(el, fn){
   if(!el) return;
+  regAct(el, fn);
   el.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
     e.preventDefault();
@@ -1356,6 +1440,15 @@ function setPaused(v){
   else { try{ dlg.close(); }catch(e){ dlg.removeAttribute('open'); } }
 }
 
+function setControllerLabels(a, b, select){
+  const values = [['fc-a-label',a],['fc-b-label',b],['fc-select-label',select]];
+  values.forEach(([id,value])=>{ const el=$(id); if(el && el.textContent!==value) el.textContent=value; });
+  const aBtn=$('fc-btn-a'), bBtn=$('fc-btn-b'), selectBtn=$('fc-btn-select');
+  if(aBtn) aBtn.setAttribute('aria-label',a);
+  if(bBtn) bBtn.setAttribute('aria-label',b);
+  if(selectBtn) selectBtn.setAttribute('aria-label',select);
+}
+
 /* ── 入力 ─────────────────────────────────────── */
 function bindInput(){
   installFcIosTouchGuard();
@@ -1363,7 +1456,7 @@ function bindInput(){
     buttons: {
       'fc-btn-a': ['KeyZ'],
       'fc-btn-b': ['KeyX'],
-      'fc-btn-select': ['ShiftLeft'],
+      'fc-btn-select': ['Backspace'],
       'fc-btn-start': ['Enter']
     },
     onChange(keys){
@@ -1400,9 +1493,17 @@ function bindInput(){
   tap('fc-btn-a', () => {
     if(PAUSED) return;
     if(MODE==='orbit' && G.landable) act('land');
+    else if(MODE==='surface' && !G.nearFind) IN.jump = true;
     else act('record');
   });
   tap('fc-btn-b', () => { if(!PAUSED) act('shoot'); });
+  tap('fc-btn-select', () => {
+    if(PAUSED) return;
+    if(MODE==='surface'){
+      toast('帰還', '着陸船へ帰還', '周回軌道へ戻った', true);
+      enterOrbit(CUR);
+    } else if(MODE==='cruise' || MODE==='orbit') openMap();
+  });
   tap('fc-btn-start', () => setPaused(!PAUSED));
 
   const down = e => {
@@ -1737,9 +1838,10 @@ function updCruise(dt){
     l3:'速度', v3:Math.round(G.speed*640).toLocaleString()+' km/h',
     bar:prog*100 });
   setHint((usePadHint()
-    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>加速</b> ・ <b>B</b> 撮影'
+    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>B</b> 撮影 ・ <b>SELECT</b> 星図'
     : '<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>SPACE</b> 減速 ・ <b>C</b> 後方視界 ・ <b>F</b> 自動操縦')
     + (off>18 ? ' ── <b style="color:var(--ember)">針路ずれ '+off.toFixed(0)+'°</b>' : ''));
+  setControllerLabels('航行', '撮影', '星図');
   if(off>22 && !G.warned){ G.warned=1; setTimeout(()=>G.warned=0, 6000); }
   if(dist < b.rad*3.1) enterOrbit(b);
 }
@@ -1861,9 +1963,10 @@ function updOrbit(dt){
   else if(G.sat && G.sat.position.distanceTo(G.ship.position)<R*2.2) showLabel(G.sat.position, b.sat.name);
   else hideLabel();
   setHint(usePadHint()
-    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>A</b> 観測'+(landable?'/着陸':'')+' ・ <b>B</b> 撮影'
+    ? '<b>十字</b> 機首/旋回 ・ <b>A</b> '+(landable?'着陸':'観測')+' ・ <b>B</b> 撮影 ・ <b>SELECT</b> 星図'
     : '<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>E</b> 観測 ・ <b>P</b> 撮影'
       + (landable? ' ・ <b>L</b> 降下':'') + ' ・ <b>ESC</b> 星図');
+  setControllerLabels(landable?'着陸':'観測', '撮影', '星図');
 }
 
 /* ── 画面上のラベル ─────────────────────────── */
@@ -1889,6 +1992,7 @@ function act(kind){
         G.near.userData.done = true;
         G.near.userData.ring.material.color.set(0x57a897);
         toast(r.kind, r.n, r.t, false); Audio2.chord([523,659,784]);
+        materialToast(r.key);
         G.near = null; updMapPct(); checkComplete();
       }
     } else if(MODE==='surface' && G.nearFind){
@@ -1897,6 +2001,7 @@ function act(kind){
         G.nearFind.userData.done = true;
         G.nearFind.userData.ring.material.color.set(0x57a897);
         toast('発見', r.n, r.t, false); Audio2.chord([440,587,698]);
+        materialToast(r.key);
         G.nearFind = null; updMapPct(); checkComplete();
       }
     } else toast('記録', '対象がない', '光っている目標に近づいて', true);
@@ -1941,7 +2046,7 @@ function checkSkyShot(){
   const to = G.skyAim.position.clone().sub(camera.position).normalize();
   if(dir.angleTo(to) < 0.34){
     const r = G.skyShot;
-    if(mark(r.key)){ toast('観測', r.n, r.t, false); Audio2.chord([523,698,880]); updMapPct(); checkComplete(); }
+    if(mark(r.key)){ toast('観測', r.n, r.t, false); materialToast(r.key); Audio2.chord([523,698,880]); updMapPct(); checkComplete(); }
   }
 }
 function checkComplete(){
@@ -1951,6 +2056,7 @@ function checkComplete(){
     mark(b.id+':clear');
     setTimeout(()=>toast('完了', b.name+' の記録が埋まった', '星図から次の星へ', false), 900);
   }
+  checkSolarCompletion();
 }
 /* ===========================================================
    地表 — 降下・歩行・探査車・発見
@@ -1985,13 +2091,35 @@ function buildTerrain(cfg){
   for(let i=0;i<pos.count;i++){
     const x=pos.getX(i), z=pos.getZ(i);
     const y = heightAt(x,z); pos.setY(i,y);
-    const t = clamp(0.5 + y*0.055 + (fbm(x*0.06,z*0.06,2,2)-0.5)*0.75, 0, 1);
+    const n = groundNormalAt(x,z,1.1);
+    const slope = 1-n.y;
+    const grain = fbm(x*0.18,z*0.18,TER.seed+57,3)-0.5;
+    const t = clamp(0.5 + y*0.055 + grain*0.34 - slope*0.9, 0, 1);
     c.copy(cA).lerp(cB, t);
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
   geo.computeVertexNormals();
-  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.97, metalness:0.0, flatShading:true}));
+  const detail = surfaceDetailTexture(cfg);
+  return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    vertexColors:true, map:detail, bumpMap:detail, bumpScale:0.42,
+    roughness:0.94, metalness:0.0, flatShading:false
+  }));
+}
+const SURFACE_TEX = {};
+function surfaceDetailTexture(cfg){
+  const key = cfg.ground[0]+'-'+cfg.ground[1];
+  if(SURFACE_TEX[key]) return SURFACE_TEX[key];
+  const cv=mkCv(192,192), cx=cv.getContext('2d'), im=cx.createImageData(192,192);
+  for(let y=0;y<192;y++) for(let x=0;x<192;x++){
+    const fine=fbm(x*0.075,y*0.075,(cfg.rough*19)|0,4);
+    const pits=Math.pow(Math.abs(fine-0.5)*2,2);
+    const v=clamp(Math.round(150+fine*68-pits*24),80,226), i=(y*192+x)*4;
+    im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=255;
+  }
+  cx.putImageData(im,0,0);
+  const tx=new THREE.CanvasTexture(cv); tx.wrapS=tx.wrapT=THREE.RepeatWrapping; tx.repeat.set(22,22);
+  tx.anisotropy=2; SURFACE_TEX[key]=tx; return tx;
 }
 function rockMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.95, flatShading:true}); }
 function metalMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.42, metalness:0.72, flatShading:true}); }
@@ -2179,6 +2307,9 @@ function buildSurface(obj, isSat){
   G.player = buildWalker(G.rover);
   G.pl = { x:0, z:0, y:heightAt(0,0), vy:0, vx:0, vz:0, ground:true, face:0 };
   G.player.position.set(0, G.pl.y, 0); scene.add(G.player);
+  const shadowMat = new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.28,depthWrite:false});
+  G.contactShadow = new THREE.Mesh(new THREE.CircleGeometry(G.rover?2.35:0.72,24),shadowMat);
+  G.contactShadow.rotation.x=-Math.PI/2; G.contactShadow.position.set(0,G.pl.y+0.035,0); scene.add(G.contactShadow);
   // 着陸船
   G.lander = buildShip(); G.lander.scale.setScalar(1.35);
   G.lander.position.set(-13, heightAt(-13,7)+1.6, 7); G.lander.rotation.y = 0.9;
@@ -2270,10 +2401,13 @@ function updSurface(dt){
   const yaw = IN.look.x, pitch = IN.look.y;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-  const spd = G.rover? 21 : 8.4;
+  const earthG=21, gravityRatio=clamp(G.grav/earthG,0.055,1.1);
+  // 低重力では踏ん張りが弱く加速・減速が緩い。探査車も同じくタイヤの荷重が減る。
+  const traction=Math.pow(gravityRatio,0.34);
+  const spd = (G.rover? 21 : 8.4) * (0.58+traction*0.42);
   const wantX = (fx*IN.fwd + rx*IN.side)*spd;
   const wantZ = (fz*IN.fwd + rz*IN.side)*spd;
-  const accel = pl.ground? 9.5 : 2.2;
+  const accel = pl.ground? (3.2+6.3*traction) : (0.42+1.2*traction);
   pl.vx = lerp(pl.vx, wantX, clamp(dt*accel,0,1));
   pl.vz = lerp(pl.vz, wantZ, clamp(dt*accel,0,1));
   pl.x += pl.vx*dt; pl.z += pl.vz*dt;
@@ -2290,7 +2424,10 @@ function updSurface(dt){
     pl.y = gy; pl.vy = 0; pl.ground = true;
   } else pl.ground = false;
   if(IN.jump && pl.ground){
-    pl.vy = 5.4 + G.grav*0.46; pl.ground=false; IN.jump=false;
+    // 同じボタンでも、低重力ほど高く長く浮き、高重力ほど短い跳躍になる。
+    // 実重力比は保ちつつ、宇宙服・探査車の出力限界を加味して跳躍を抑える。
+    const jumpHeight=(G.rover?0.38:0.55)*clamp(Math.pow(earthG/G.grav,0.38),0.78,3.0);
+    pl.vy = Math.sqrt(2*G.grav*jumpHeight); pl.ground=false; IN.jump=false;
     Audio2.blip(180+G.grav*8, 0.14, 'triangle');
   }
   // 姿勢
@@ -2299,16 +2436,32 @@ function updSurface(dt){
     let dA = want - pl.face; while(dA>Math.PI) dA-=TAU; while(dA<-Math.PI) dA+=TAU;
     pl.face += dA*clamp(dt*7,0,1); }
   G.player.position.set(pl.x, pl.y, pl.z);
-  G.player.rotation.y = pl.face;
-  // 接地に合わせて少し傾ける
-  const hL = heightAt(pl.x-1.2, pl.z), hR = heightAt(pl.x+1.2, pl.z);
-  G.player.rotation.z = clamp((hL-hR)*0.2, -0.3, 0.3);
+  // 前後左右の勾配をまとめた法線へ全身を合わせる。空中では姿勢をゆっくり水平へ戻す。
+  const normal=pl.ground?groundNormalAt(pl.x,pl.z,G.rover?1.7:0.7):SURFACE_UP;
+  const qTilt=new THREE.Quaternion().setFromUnitVectors(SURFACE_UP,normal);
+  const qFace=new THREE.Quaternion().setFromAxisAngle(SURFACE_UP,pl.face);
+  const targetQ=qTilt.multiply(qFace);
+  G.player.quaternion.slerp(targetQ,clamp(dt*(G.rover?7:10),0,1));
   if(G.rover && G.player.userData.wheels){
     const s = moving*dt*1.6;
-    G.player.userData.wheels.forEach(w=>{ w.rotation.x += s; });
+    const cf=Math.cos(pl.face), sf=Math.sin(pl.face);
+    G.player.userData.wheels.forEach(w=>{
+      w.rotation.x += s;
+      const wx=pl.x+w.position.x*cf+w.position.z*sf;
+      const wz=pl.z-w.position.x*sf+w.position.z*cf;
+      const suspension=clamp(heightAt(wx,wz)-pl.y,-0.38,0.38);
+      w.position.y=lerp(w.position.y,0.62+suspension,clamp(dt*12,0,1));
+    });
   } else if(G.player.userData.legs){
     const t = Math.sin(T*(6+moving*0.5))*clamp(moving*0.09,0,0.5);
     G.player.userData.legs.forEach((l,i)=>{ l.rotation.x = t*(i%2?1:-1); });
+  }
+  if(G.contactShadow){
+    const air=Math.max(0,pl.y-heightAt(pl.x,pl.z));
+    G.contactShadow.position.set(pl.x,heightAt(pl.x,pl.z)+0.045,pl.z);
+    G.contactShadow.scale.setScalar(1+air*0.045);
+    G.contactShadow.material.opacity=0.28*clamp(1-air/9,0.08,1);
+    G.contactShadow.quaternion.setFromUnitVectors(SURFACE_UP,groundNormalAt(pl.x,pl.z,0.8));
   }
   // カメラ
   const dist = IN.zoom * (G.rover?1.25:1);
@@ -2337,12 +2490,13 @@ function updSurface(dt){
   const acts = [];
   if(G.nearFind) acts.push({l:'記録する', k:'E', f:()=>act('record')});
   acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
-  acts.push({l:'船に戻る', k:'', f:()=>enterOrbit(CUR)});
+  acts.push({l:'船に戻る', k:'SELECT', f:()=>enterOrbit(CUR)});
   setActions(acts);
   setHint((usePadHint()
-    ? '<b>十字</b> 前後・旋回 ・ 画面ドラッグで視点 ・ <b>A</b> 記録 ・ <b>B</b> 撮影 ・ <b>加速</b> ジャンプ'
+    ? '<b>十字</b> 前後・旋回 ・ <b>A</b> '+(G.nearFind?'記録':'ジャンプ')+' ・ <b>B</b> 撮影 ・ <b>SELECT</b> 船へ帰還'
     : '<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影')
     + (G.skyShot? ' ── <b style="color:var(--amber)">空に見えるものを撮ってみる</b>':''));
+  setControllerLabels(G.nearFind?'記録':'跳ぶ', '撮影', '帰還');
 }
 /* ===========================================================
    UI と進行 — 星図・日誌・計器
@@ -2360,11 +2514,72 @@ function totalScore(){
   let g=0,t=0; BODIES.forEach(b=>{ const s=bodyScore(b); g+=s.got; t+=s.total; });
   return { got:g, total:t, pct: t? Math.round(g/t*100):0 };
 }
+const MATERIAL = {
+  sun:['日核磁性繊維','SOL-F'], mercury:['耐熱レゴリス晶','HG-R'], venus:['超臨界炭素膜','VN-C'],
+  earth:['軌道級複合材','ER-O'], moon:['真空焼結チタン','LN-T'], mars:['酸化鉄セラミック','MR-X'],
+  jupiter:['高圧金属水素','JP-H'], europa:['氷殻導電塩','EU-S'], saturn:['環氷ナノ格子','ST-I'],
+  titan:['メタン有機装甲','TI-M'], uranus:['極低温メタ結晶','UR-K'], miranda:['断崖衝撃晶','MI-V'],
+  neptune:['超音速流体膜','NP-W'], triton:['窒素氷複合材','TR-N']
+};
+const SHIP_TIERS = [
+  {n:'I',need:0,reach:4,label:'近地航行殻'},
+  {n:'II',need:6,reach:5,label:'耐放射複合殻'},
+  {n:'III',need:14,reach:7,label:'高圧巨星殻'},
+  {n:'IV',need:24,reach:9,label:'外縁突破殻'}
+];
+function scienceKeys(){
+  const keys=[];
+  BODIES.forEach(b=>{
+    (b.obs||[]).forEach(o=>keys.push(b.id+':'+o.k));
+    (b.finds||[]).forEach(f=>keys.push(b.id+':'+f.k));
+    if(b.sat) (b.sat.finds||[]).forEach(f=>keys.push(b.sat.id+':'+f.k));
+  });
+  return keys;
+}
+function materialCount(){ return scienceKeys().reduce((n,k)=>n+(has(k)?1:0),0); }
+function shipTier(){
+  const count=materialCount(); let tier=SHIP_TIERS[0];
+  SHIP_TIERS.forEach(t=>{ if(count>=t.need) tier=t; });
+  return {tier,count,next:SHIP_TIERS[Math.min(SHIP_TIERS.indexOf(tier)+1,SHIP_TIERS.length-1)]};
+}
+function bodyMaterialId(key){
+  const id=String(key).split(':')[0]; return MATERIAL[id]||['未知試料','UN-X'];
+}
+function materialToast(key){
+  const m=bodyMaterialId(key), before=materialCount()-1, after=materialCount();
+  toast('素材回収 '+m[1],m[0],'科学試料を船体研究庫へ格納',true);
+  const oldTier=SHIP_TIERS.filter(t=>before>=t.need).pop()||SHIP_TIERS[0];
+  const newTier=SHIP_TIERS.filter(t=>after>=t.need).pop()||SHIP_TIERS[0];
+  if(oldTier!==newTier) setTimeout(()=>{
+    toast('船体強化','HULL '+newTier.n+' ─ '+newTier.label,'新しい航路が星図に開いた',false);
+    Audio2.chord([220,330,440,660]);
+  },700);
+}
+function bodyUnlocked(id){
+  const idx=ROUTE.indexOf(id), st=shipTier(); return idx<0 || idx<=st.tier.reach;
+}
+function unlockNeed(id){
+  const idx=ROUTE.indexOf(id); return SHIP_TIERS.find(t=>idx<=t.reach)||SHIP_TIERS[SHIP_TIERS.length-1];
+}
+function checkSolarCompletion(){
+  const s=totalScore();
+  if(s.total>0 && s.got>=s.total && !has('solar:complete')){
+    mark('solar:complete'); setTimeout(showEnding,1300);
+  }
+}
+function showEnding(){
+  PAUSED=false; if($('pauseDlg').open) $('pauseDlg').close();
+  $('hud').hidden=true; $('title').hidden=true; $('map').hidden=true; $('descend').hidden=true; $('log').hidden=true;
+  $('ending').hidden=false; hideLabel(); setActions([]);
+  Audio2.noise(0.32,0.12); Audio2.chord([55,82,110,165]);
+}
 function updMapPct(){
   const s = totalScore();
+  const st=shipTier();
   $('mapPct').textContent = s.pct+'%';
   $('logPct').textContent = s.pct+'%';
-  $('logSub').textContent = s.got+' / '+s.total+' 項目・写真 '+SAVE.photos.length+' 枚';
+  $('shipStatus').textContent = '船体 '+st.tier.n+' / 素材 '+st.count+(st.tier.n==='IV'?'':' → '+st.next.need);
+  $('logSub').textContent = s.got+' / '+s.total+' 項目・素材 '+st.count+'・写真 '+SAVE.photos.length+' 枚';
   if(!$('map').hidden) renderRail();
 }
 
@@ -2442,18 +2657,21 @@ function renderRail(){
     const btn = host.querySelector('[data-id="'+id+'"]');
     if(!btn) return;
     const done = s.got >= s.total;
+    const unlocked = bodyUnlocked(id);
     btn.classList.toggle('done', done);
+    btn.classList.toggle('locked', !unlocked);
     if(id===SEL) btn.setAttribute('aria-current','true');
     else btn.removeAttribute('aria-current');
     btn.setAttribute('aria-selected', id===SEL ? 'true' : 'false');
     btn.querySelector('.dot').style.background = '#'+new THREE.Color(b.color).getHexString();
-    btn.querySelector('.nm').textContent = b.name;
-    btn.querySelector('.pct').textContent = s.got ? Math.round(s.got/s.total*100)+'%' : '';
-    btn.setAttribute('aria-label', b.name+(done?' 記録完了': s.got? ' 記録'+Math.round(s.got/s.total*100)+'%':' 未到達'));
+    btn.querySelector('.nm').textContent = unlocked ? b.name : 'LOCKED '+b.name;
+    btn.querySelector('.pct').textContent = unlocked ? (s.got ? Math.round(s.got/s.total*100)+'%' : '') : unlockNeed(id).need+'材';
+    btn.setAttribute('aria-label', b.name+(!unlocked?' 船体強度不足':done?' 記録完了': s.got? ' 記録'+Math.round(s.got/s.total*100)+'%':' 未到達'));
   });
 }
 function renderDetail(){
   const b = BY_ID[SEL], s = bodyScore(b);
+  const unlocked=bodyUnlocked(SEL), req=unlockNeed(SEL), ship=shipTier();
   $('dKana').textContent = b.kana;
   $('dName').textContent = b.name;
   $('dMission').textContent = b.mission;
@@ -2461,20 +2679,24 @@ function renderDetail(){
              : b.type==='star' ? '安全距離からの観測のみ'
              : b.type==='port' ? '宇宙港を探索 ＋ 軌道から地球を撮る'
              : (b.rover? '探査車で走行 ＋ 発見':'低重力で歩行 ＋ 発見');
-  $('dStats').textContent = play+' ／ 記録 '+s.got+' / '+s.total;
+  $('dStats').textContent = unlocked
+    ? play+' ／ 記録 '+s.got+' / '+s.total+' ／ 回収素材 '+ship.count
+    : '航路封鎖 ／ 船体 '+req.n+' が必要（科学素材 '+ship.count+' / '+req.need+'）';
   const st = $('dStamp');
   if(s.got>=s.total){ st.className='stamp on'; st.textContent='記録完了'; }
   else if(has(b.id+':reach')){ st.className='stamp on'; st.textContent='到達済み'; }
-  else { st.className='stamp off'; st.textContent='未到達'; }
-  $('btnGo').textContent = has(b.id+':reach') ? b.name+'へ再訪' : b.name+'へ出発';
+  else { st.className='stamp off'; st.textContent=unlocked?'未到達':'強度不足'; }
+  $('btnGo').disabled=!unlocked;
+  $('btnGo').textContent = unlocked ? (has(b.id+':reach') ? b.name+'へ再訪' : b.name+'へ出発') : '素材を集めて船体を強化';
 }
 function openMap(){
   if(MODE!=='attract') buildAttract();
-  $('hud').hidden=true; $('title').hidden=true; $('descend').hidden=true; $('map').hidden=false;
+  $('hud').hidden=true; $('title').hidden=true; $('descend').hidden=true; $('ending').hidden=true; $('map').hidden=false;
   hideLabel(); actSig=''; $('action').innerHTML='';
   renderRail(); renderDetail(); updMapPct();
   const cur = $('rail').querySelector('[aria-current="true"]');
   if(cur) cur.scrollIntoView({block:'nearest'});
+  setControllerLabels('決定', '日誌', '戻る');
 }
 
 /* ── 航海日誌 ─────────────────────────────── */
@@ -2524,6 +2746,7 @@ function startEngine(){
     $('loading').hidden = true;
     $('title').hidden = false;
     updMapPct();
+    if(has('solar:complete')) setTimeout(showEnding,900);
   }catch(err){
     $('loadMsg').textContent = '起動に失敗した：'+(err&&err.message? err.message:'原因不明');
     console.error(err);
@@ -2565,10 +2788,17 @@ function boot(){
   bindTapBtn('btnLogX', toggleLog);
   bindTapBtn('btnMap2', openMap);
   bindTapBtn('btnGo', ()=>{
+    if(!bodyUnlocked(SEL)){
+      const r=unlockNeed(SEL), s=shipTier();
+      toast('航路封鎖','船体強度が足りない','科学素材をあと '+Math.max(0,r.need-s.count)+' 個集める',false);
+      return;
+    }
     Audio2.init();
     $('map').hidden = true;
     startCruise(SEL);
   });
+  bindTapBtn('btnEndLog', ()=>{ $('ending').hidden=true; renderLog(); $('log').hidden=false; });
+  bindTapBtn('btnEndMap', openMap);
   $('log').addEventListener('pointerdown', e=>{ if(e.target===$('log')) toggleLog(); });
 }
 boot();
