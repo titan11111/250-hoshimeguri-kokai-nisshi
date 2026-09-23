@@ -2001,6 +2001,7 @@ function bindInput(){
     el.addEventListener('lostpointercapture', up);
   };
   tap('fc-btn-a', () => {
+    if(!$('title').hidden){ startVoyage(); return; }   // タイトルでは A＝出港
     if(PAUSED) return;
     if(MODE==='orbit' && G.landable) act('land');
     else if(MODE==='surface' && !G.nearFind) IN.jump = true;
@@ -2062,6 +2063,9 @@ function bindInput(){
     if(e.metaKey||e.ctrlKey) return;
     const k = e.key.length===1 ? e.key.toLowerCase() : e.key;
     K[k]=true;
+    if(!$('title').hidden){                        // タイトルでは Z(=A)/Enter/Space で出港
+      if(k==='z'||k==='Enter'||k===' '){ e.preventDefault(); startVoyage(); return; }
+    }
     if(k==='e') act('record');
     if(k==='p') act('shoot');
     if(k==='q') act('skygaze');
@@ -2766,6 +2770,22 @@ function finishLaunch(skipped){
   try{ localStorage.setItem(LAUNCH_KEY, '1'); }catch(e){}
   if(!skipped) toast('出港', '第七宇宙港を離れる', 'ここへ帰ってくるために出ていく。', false);
   openMap();
+}
+
+/* ── タイトルの開始入力 ─────────────────────────
+   出港ボタンだけでなく、Aボタン・タイトル画面のタップでも出港する。
+   入口を1つにしておかないと「iOSではタップで始まるがAでは始まらない」のような
+   経路ごとの差が出る。二重発火は VOYAGE_STARTED で止める（2026-09-23）。 */
+let VOYAGE_STARTED = false;
+function startVoyage(){
+  if(VOYAGE_STARTED) return;
+  if($('title').hidden) return;                 // タイトルが出ている間だけ効かせる
+  VOYAGE_STARTED = true;
+  unlockAudio();                                // iOSの音はこのユーザー操作の中でしか通せない
+  Audio2.ambience(58,0.055);
+  let done = false;
+  try{ done = localStorage.getItem(LAUNCH_KEY)==='1'; }catch(e){}
+  if(done) openMap(); else buildLaunch();       // 初回だけ地球からの打ち上げを見せる
 }
 
 /* ── 待機（タイトル／星図の背景） ─────────────── */
@@ -4572,12 +4592,19 @@ function boot(){
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   };
-  bindTapBtn('btnStart', ()=>{
-    Audio2.init(); Audio2.ambience(58,0.055);
-    let done = false;
-    try{ done = localStorage.getItem(LAUNCH_KEY)==='1'; }catch(e){}
-    if(done) openMap(); else buildLaunch();       // 初回だけ地球からの打ち上げを見せる
-  });
+  bindTapBtn('btnStart', startVoyage);
+  /* タイトルはどこをタップしても出港する。iOSでは pointerdown で受けて
+     同じ操作の中で音のロックを解く。航海日誌など他のボタンのタップは奪わない。 */
+  (function bindTitleTap(){
+    const el = $('title'); if(!el) return;
+    el.addEventListener('pointerdown', e=>{
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      if(e.target.closest('button')) return;
+      e.preventDefault();
+      if(navigator.vibrate) navigator.vibrate(15);
+      startVoyage();
+    }, {passive:false});
+  })();
   bindTapBtn('btnLog0', toggleLog);
   bindTapBtn('btnLog1', toggleLog);
   bindTapBtn('btnLog2', toggleLog);
