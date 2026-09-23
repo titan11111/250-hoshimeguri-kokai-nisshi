@@ -1698,7 +1698,7 @@ function planetMaps(kind, hex, seed, id){
   TEXCACHE[ck] = out; return out;
 }
 
-function glowSprite(hex, size, power){
+function glowTexture(hex, power){
   const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d');
   const c = new THREE.Color(hex), r=Math.floor(c.r*255), gg=Math.floor(c.g*255), b=Math.floor(c.b*255);
   const grd = g.createRadialGradient(64,64,0,64,64,64);
@@ -1707,8 +1707,10 @@ function glowSprite(hex, size, power){
   grd.addColorStop(0.55,`rgba(${r},${gg},${b},.18)`);
   grd.addColorStop(1,`rgba(${r},${gg},${b},0)`);
   g.fillStyle=grd; g.fillRect(0,0,128,128);
-  const t=new THREE.CanvasTexture(cv);
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+  return new THREE.CanvasTexture(cv);
+}
+function glowSprite(hex, size, power){
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture(hex,power),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
   s.scale.set(size,size,1); return s;
 }
 
@@ -3045,6 +3047,27 @@ function fmtKm(u, b){
 /* ===========================================================
    周回・観測 — 惑星のまわりを飛び、記録する
    =========================================================== */
+/* 観測目標の色（2026-09-23 一元化）。未記録は黄色の発光体、記録済は緑。
+   以前は 0xe8a33d/0x57a897 を呼び出し側3箇所へ直書きしていて、光柱だけ
+   記録後も未記録色のまま残っていた */
+const MARK_Y = 0xffd21e, MARK_DONE = 0x57a897;
+/* 光柱の不透明度。未記録 0.2→0.4（輝き2倍・タイタン指示 2026-09-23）。
+   記録済は 0.18。消してしまうと「どこを記録したか」が辿れなくなるので、
+   見える強さは残したまま、未記録の半分以下にして主従をつける。
+   加えて未記録だけ脈動させる（色・明るさ・動きの3つで分ける） */
+const BEAM_OP = 0.4, BEAM_OP_DONE = 0.18;
+/* 記録済のにじみ用テクスチャは全マーカーで1枚を使い回す（色は常に MARK_DONE） */
+let GLOW_DONE_TEX = null;
+function markDone(m){
+  m.userData.done = true;
+  if(m.userData.ring) m.userData.ring.material.color.set(MARK_DONE);
+  if(m.userData.beam) m.userData.beam.material.color.set(MARK_DONE);
+  if(m.userData.glow){
+    if(!GLOW_DONE_TEX) GLOW_DONE_TEX = glowTexture(MARK_DONE, 0.6);
+    m.userData.glow.material.map = GLOW_DONE_TEX;
+    m.userData.glow.material.needsUpdate = true;
+  }
+}
 function makeMarker(color, size){
   const g = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.TorusGeometry(size, size*0.055, 6, 28),
@@ -3241,12 +3264,13 @@ function updOrbit(dt){
 }
 
 /* ── 画面上のラベル ─────────────────────────── */
-function showLabel(pos3, text){
+function showLabel(pos3, text, color){
   const v = pos3.clone().project(camera);
   const el = $('tgtLabel');
   if(v.z>1 || v.x<-1.1 || v.x>1.1 || v.y<-1.1 || v.y>1.1){ el.hidden=true; return; }
   const host = $('game');
   el.hidden = false; el.textContent = text;
+  el.style.color = color || '';        // 未指定ならCSSの既定色へ戻す
   el.style.left = ((v.x*0.5+0.5)*host.clientWidth)+'px';
   el.style.top  = ((-v.y*0.5+0.5)*host.clientHeight - 26)+'px';
 }
@@ -3260,8 +3284,7 @@ function act(kind){
     if(MODE==='orbit' && G.near){
       const r = G.near.userData.rec;
       if(mark(r.key)){
-        G.near.userData.done = true;
-        G.near.userData.ring.material.color.set(0x57a897);
+        markDone(G.near);
         toast(r.kind, r.n, r.t, false); Audio2.chord([523,659,784]);
         materialToast(r.key);
         G.near = null; updMapPct(); checkComplete();
@@ -3269,8 +3292,8 @@ function act(kind){
     } else if(MODE==='surface' && G.nearFind){
       const r = G.nearFind.userData.rec;
       if(mark(r.key)){
-        G.nearFind.userData.done = true;
-        G.nearFind.userData.ring.material.color.set(0x57a897);
+        // 輪だけ変えると、記録済なのに黄色い柱と黄色いにじみが残る。3つまとめて緑へ
+        markDone(G.nearFind);
         toast('発見', r.n, r.t, false); Audio2.chord([440,587,698]);
         materialToast(r.key);
         G.nearFind = null; updMapPct(); checkComplete();
@@ -4056,6 +4079,26 @@ function addSkyBody(kind){
 }
 
 /* ── 地表を作る ─────────────────────────────── */
+/* 断面（[中心からの距離の割合, 高さの割合]）を回して作る低ポリの山。
+   周分割を粗くすると稜線が直線の「辺」として立ち、遠景ではピラミッドに見える。
+   真円のままでも回転体だと分かってしまうので、裾ほど強く半径を揺らす。
+   揺らしの式は方位角だけの関数にすること。頂点ごとの乱数にすると継ぎ目が裂ける。 */
+function moundGeometry(R, H, prof, seg, amp, phase){
+  const pts = prof.map(p => new THREE.Vector2(Math.max(p[0]*R, 0.01), p[1]*H));
+  const geo = new THREE.LatheGeometry(pts, seg);
+  const pos = geo.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const vx = pos.getX(i), vz = pos.getZ(i), rr = Math.hypot(vx, vz);
+    if(rr < 1e-4) continue;
+    const a = Math.atan2(vz, vx);
+    const k = (rr / R) * amp;           // 山頂（カルデラ）はほぼ揺らさない
+    const f = 1 + k*(Math.sin(a*3+phase) + 0.6*Math.sin(a*7+phase*3+2.1)
+                     + 0.35*Math.sin(a*13-phase-1.2));
+    pos.setX(i, vx*f); pos.setZ(i, vz*f);
+  }
+  pos.needsUpdate = true; geo.computeVertexNormals();
+  return geo;
+}
 function buildSurface(obj, isSat){
   const cfgName = obj.surf, cfg = SURF[cfgName];
   const seed = (obj.id.charCodeAt(0)*3 + obj.id.length)%17;
@@ -4097,27 +4140,49 @@ function buildSurface(obj, isSat){
     b.scale.y = sy; scene.add(b);
     G.rocks.push({ x:x, z:z, cy:cy, rx:s*0.92, ry:s*sy*0.92, m:b });
   }
-  if(cfgName==='dune'||cfgName==='rocky'){ // 遠景の丘
+  /* 遠景の丘（2026-09-23 再構築）。旧版は ConeGeometry(…,6) ＝ 六角錐で、稜線が
+     直線の「辺」として立つので、遠景では完全にピラミッドとして読まれていた。
+     しかも高さ22〜62／半径50〜110 ＝ 斜度25〜50°。実際にタイタンが「火星の山が
+     ピラミッドに見える」と指摘したのはオリンポス山ではなくこの丘。
+     対策: 周を17分割にして稜線を消し、高さは半径に比例させて斜度を9〜16°へ寝かせ、
+     さらに方位ごとに半径を揺らして回転体に見えないようにする。 */
+  if(cfgName==='dune'||cfgName==='rocky'){
+    const HILL = [ [1.00,0.00],[0.93,0.17],[0.83,0.34],[0.68,0.53],
+                   [0.50,0.71],[0.32,0.86],[0.15,0.96],[0.00,1.00] ];
     for(let i=0;i<9;i++){ const a=Math.random()*TAU, d=300+Math.random()*180;
       // オリンポス山の方角には丘を置かない（裾野に小山が刺さって縮尺が壊れる）
-      if(cfg.olympus && Math.abs(angDiff(a, OLYMPUS_AZ)) < 0.75) continue;
-      const h=22+Math.random()*40;
-      const m=new THREE.Mesh(new THREE.ConeGeometry(50+Math.random()*60,h,6), rm);
-      m.position.set(Math.cos(a)*d, h*0.3, Math.sin(a)*d); scene.add(m); }
+      if(cfg.olympus && Math.abs(angDiff(a, OLYMPUS_AZ)) < 0.95) continue;
+      const rad = 70+Math.random()*70, h = rad*(0.16+Math.random()*0.12);
+      const m = new THREE.Mesh(moundGeometry(rad, h, HILL, 17, 0.085, i*1.7), rm);
+      m.position.set(Math.cos(a)*d, h*0.06, Math.sin(a)*d);
+      m.rotation.y = Math.random()*TAU; scene.add(m); }
   }
-  /* ── オリンポス山（2026-09-23）────────────────────────────
+  /* ── オリンポス山（2026-09-23 再構築）──────────────────────
      歩ける範囲は半径215、地形メッシュは一辺480（半径240）しかないので、
-     山は地形の外側に置く「地標」として作る。断面（裾は緩く、基部に急崖、
-     山頂にカルデラ）を Lathe で回した盾状火山。低ポリ（周11分割）で他の岩と質感を揃える。
-     距離820・フォグ180〜1150 のため 6割ほど霞に沈み、大きさが距離として読める。 */
+     山は地形の外側に置く「地標」として作る。断面を Lathe で回した盾状火山。
+
+     旧版がピラミッドに見えていた原因は2つ（どちらも形の問題で、色や霞ではない）:
+       ① 高さ292／半径600 ＝ 平均斜度26°の円錐。実物の盾状火山は 22km／300km で
+          斜度5°前後しかない。26°は富士山どころかピラミッド（52°）寄りの立ち方
+       ② 周11分割。真上から見て十一角形なので、稜線が直線の「辺」として立ち、
+          稜線が2本見えた瞬間に四角錐として読まれる
+     対策: 斜度を10〜11°へ寝かせ（H/R 0.487→0.205）、周を44分割にして稜線を消す。
+     そのうえでオリンポス固有の3点を入れる:
+       ・基部の急崖（最大の識別点。実物は高さ6km級の崖が裾をぐるりと囲む）
+       ・崖から山頂までの、わずかに上に凹んだ長い緩斜面
+       ・山頂の入れ子カルデラ（外輪より一段低い平らな底）
+     裾を広げたぶん距離も 860→1000 へ送り、手前の裾の位置（260）は据え置く。 */
   if(cfg.olympus){
-    const R = 600, H = 292;
-    const prof = [ [1.00,0], [0.965,0.10], [0.82,0.29], [0.58,0.55],
-                   [0.33,0.80], [0.155,0.975], [0.118,0.845], [0.0,0.815] ];
-    const pts = prof.map(p=>new THREE.Vector2(Math.max(p[0]*R, 0.01), p[1]*H));
-    const mons = new THREE.Mesh(new THREE.LatheGeometry(pts, 11),
+    const R = 740, H = 152;
+    // [中心からの距離の割合, 高さの割合]。外周→山頂→カルデラ底の順
+    const prof = [ [1.000,0.000], [0.975,0.055], [0.952,0.215],   // 基部の急崖（斜度43°）
+                   [0.900,0.300], [0.800,0.420], [0.660,0.560],   // 緩斜面（斜度11°）
+                   [0.500,0.700], [0.340,0.820], [0.200,0.925],
+                   [0.115,1.000],                                  // カルデラ外輪
+                   [0.108,0.880], [0.000,0.872] ];                 // 内壁とカルデラ底
+    const mons = new THREE.Mesh(moundGeometry(R, H, prof, 44, 0.052, 0.7),
       new THREE.MeshStandardMaterial({ color:0x9c4a22, roughness:0.98, flatShading:true }));
-    mons.position.set(Math.cos(OLYMPUS_AZ)*860, -42, Math.sin(OLYMPUS_AZ)*860);
+    mons.position.set(Math.cos(OLYMPUS_AZ)*1000, -42, Math.sin(OLYMPUS_AZ)*1000);
     mons.rotation.y = 0.4;
     scene.add(mons); G.olympus = mons;
   }
@@ -4157,11 +4222,14 @@ function buildSurface(obj, isSat){
     const x = Math.cos(a)*d, z = Math.sin(a)*d, y = meshHeightAt(x,z);
     const pr = propFor(f.k, cfg); pr.position.set(x,y,z); pr.rotation.y = a; scene.add(pr);
     const done = has(obj.id+':'+f.k);
-    const mk = makeMarker(done?0x57a897:0xe8a33d, 2.1);
+    // 目標の光柱（2026-09-23 強化）。棒は長さ12→18（1.5倍）・半径0.2→0.4（太さ2倍）、
+    // 未記録は黄色 MARK_Y。中心は高さの半分に置かないと根元が地面へ沈む（18なら y+9）
+    const mk = makeMarker(done?MARK_DONE:MARK_Y, 2.1);
     mk.position.set(x, y+6.2, z); mk.rotation.x = Math.PI/2;
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,12,6),
-      new THREE.MeshBasicMaterial({color:done?0x57a897:0xe8a33d, transparent:true, opacity:0.2, depthWrite:false, blending:THREE.AdditiveBlending}));
-    beam.position.set(x, y+6, z); scene.add(beam); mk.userData.beam = beam;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,18,8),
+      new THREE.MeshBasicMaterial({color:done?MARK_DONE:MARK_Y, transparent:true,
+        opacity:done?BEAM_OP_DONE:BEAM_OP, depthWrite:false, blending:THREE.AdditiveBlending}));
+    beam.position.set(x, y+9, z); scene.add(beam); mk.userData.beam = beam;
     mk.userData.rec = { key:obj.id+':'+f.k, n:f.n, t:f.t };
     mk.userData.done = done; mk.userData.ground = new THREE.Vector3(x,y,z);
     // 構造物に当たり判定を持たせる。殻のぶんだけ記録できる距離も広げないと、
@@ -4493,11 +4561,20 @@ function updSurface(dt){
     m.rotation.z += dt*0.7;
     const dd = m.userData.ground.distanceTo(G.player.position);
     if(dd<nd){ nd=dd; near=m; }
-    m.userData.glow.material.opacity = (m.userData.done?0.3:0.55)+Math.sin(T*2.2+m.position.x)*0.12;
+    m.userData.glow.material.opacity = (m.userData.done?0.22:0.72)+Math.sin(T*2.2+m.position.x)*0.12;
+    /* 未記録＝黄色く脈打つ／記録済＝緑で静止。色だけでなく「動くか動かないか」で
+       分けないと、霞に沈んだ遠景では両方ただの明るい棒に見える（2026-09-23） */
+    if(m.userData.beam){
+      m.userData.beam.material.opacity = m.userData.done
+        ? BEAM_OP_DONE
+        : BEAM_OP + Math.sin(T*2.6 + m.position.z)*BEAM_OP*0.3;
+    }
   }
   G.nearFind = (near && nd < (near.userData.reach || 8.5) && !near.userData.done) ? near : null;
+  // 記録前／記録後は文字でも言い切る。色は光柱と揃える（黄＝未記録・緑＝記録済）
   if(near && nd<26) showLabel(near.userData.ground.clone().setY(near.userData.ground.y+7),
-    (near.userData.done?'記録済 ':'') + near.userData.rec.n + (G.nearFind? ' ［E］':''));
+    (near.userData.done?'記録済 ':'未記録 ') + near.userData.rec.n + (G.nearFind? ' ［E］':''),
+    near.userData.done ? '#7ddcc4' : '#ffd21e');
   else hideLabel();
   // 空にしか無い記録（木星の出・見上げた環）の居場所を常に出す
   if(G.skyShot && G.skyAim) showSkyLabel(G.skyShotAim || G.skyShot.n); else hideSkyLabel();
