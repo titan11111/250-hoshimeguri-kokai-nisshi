@@ -255,6 +255,7 @@
   #navBox{top:calc(15px + env(safe-area-inset-top,0px));left:15px;min-width:186px}
   #navBox .t{color:var(--amber);font-size:10px;letter-spacing:.2em;margin-bottom:6px}
   #navBox .row{display:flex;justify-content:space-between;gap:12px;line-height:1.85;color:#cfe2f4}
+  #navBox .row[hidden]{display:none}   /* display:flex が hidden 属性に勝つため明示する */
   #navBox .row span:last-child{font-variant-numeric:tabular-nums;color:#fff}
   #bar{height:2px;background:rgba(207,226,244,.16);margin-top:8px}
   #bar i{display:block;height:100%;width:0%;background:var(--amber);transition:width .25s}
@@ -805,8 +806,80 @@ const Audio2 = {
     const g = this.ctx.createGain(); g.gain.value = vol||0.12;
     s.connect(f); f.connect(g); g.connect(this.master); s.start();
   },
-  toggle(){ this.on=!this.on; if(this.padGain&&this.ctx) this.padGain.gain.linearRampToValueAtTime(this.on?0.06:0, this.ctx.currentTime+0.4); storeMute(!this.on); syncMuteBtn(); return this.on; },
+  toggle(){ this.on=!this.on; if(this.padGain&&this.ctx) this.padGain.gain.linearRampToValueAtTime(this.on?0.06:0, this.ctx.currentTime+0.4); BGM.setMuted(!this.on); storeMute(!this.on); syncMuteBtn(); return this.on; },
   setMuted(muted){ if(this.on===!muted){ storeMute(muted); syncMuteBtn(); return this.on; } return this.toggle(); }
+};
+
+/* ── BGM（2026-09-23 実装）──────────────────────────────────
+   iOS Safari は「ユーザー操作の中で一度 play() を通した要素」しか、あとから
+   自由に鳴らせない。開始タップで4本すべてを音量0で通す（プライム）ことで、
+   以降のモード切替では操作なしに切り替えられる。
+   WebAudio(Audio2) とは別系統にし、AudioContext が作れない端末でも BGM は鳴る。
+   ・loop=true でループ（1回で終わらない）
+   ・playsinline / preload='none' … iOS で全画面化させず、通信も鳴らす直前まで待つ
+   ・ミュートは Audio2.on に追従（キー tg.250.mute を共有）
+   ・ポーズ・バックグラウンドで止め、復帰で戻す */
+const BGM = {
+  vol:0.34, cur:null, primed:false, slot:0, el:[],
+  // 無音1サンプルのWAV。iOS の解錠は「要素ごと」なので、先にこれで play() を通し、
+  // 実ファイルは鳴らす直前に差し替える。4曲を一度に落とすと初回タップで 5.7MB 走る。
+  SILENT:'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==',   // 8kHz/8bit/0.1秒。長さ0のWAVは WebKit が error を出して解錠できない
+  src:{ title:'Beyond_the_Last_Horizon.m4a',
+        cruise:'Beyond_the_Gravity_Well.m4a',
+        orbit:'Drifting_Past_The_Great_Divide.m4a',
+        surface:'Beneath_the_Silver_Pull.m4a' },
+  make(i){
+    if(this.el[i]) return this.el[i];
+    const a = new Audio();
+    a.loop = true; a.preload = 'none'; a.volume = 0; a.muted = !Audio2.on;
+    a.setAttribute('playsinline',''); a.setAttribute('webkit-playsinline','');
+    a.addEventListener('error', ()=>{ a._dead = true; });
+    this.el[i] = a; return a;
+  },
+  /* 必ずユーザー操作（pointerdown/click）の中から呼ぶこと */
+  prime(){
+    if(this.primed) return; this.primed = true;
+    for(let i=0;i<2;i++){
+      const a = this.make(i);
+      a.src = this.SILENT;
+      try{ const p = a.play(); if(p && p.catch) p.catch(()=>{}); a.pause(); a.currentTime = 0; }catch(e){}
+    }
+    const c = this.cur; this.cur = null; if(c) this.play(c);   // 起動時に選ばれていた曲を鳴らし直す
+  },
+  play(k){
+    if(!this.src[k] || this.cur === k) return;
+    const prev = this.primed ? this.el[this.slot] : null;
+    this.cur = k;
+    if(!this.primed) return;                       // 解錠前。prime() 側で鳴らし直す
+    const next = this.make(1 - this.slot);
+    this.slot = 1 - this.slot;
+    if(prev) this.fade(prev, 0, 0.8, true);
+    if(PAUSED) return;
+    next.pause(); next.volume = 0; next._dead = false;
+    next.preload = 'auto'; next.src = this.src[k];
+    try{ next.load(); }catch(e){}
+    try{ const p = next.play(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+    this.fade(next, this.vol, 1.2, false);
+  },
+  fade(a, to, sec, stopAtEnd){
+    if(a._tm) clearInterval(a._tm);
+    const from = a.volume, t0 = (performance.now ? performance.now() : Date.now());
+    a._tm = setInterval(()=>{
+      const now = (performance.now ? performance.now() : Date.now());
+      const k = clamp((now - t0)/(sec*1000), 0, 1);
+      a.volume = clamp(from + (to-from)*k, 0, 1);
+      if(k >= 1){ clearInterval(a._tm); a._tm = null; if(stopAtEnd && to === 0) a.pause(); }
+    }, 50);
+  },
+  active(){ return this.el[this.slot] || null; },
+  setMuted(m){ this.el.forEach(a=>{ a.muted = !!m; }); },
+  suspend(){ this.el.forEach(a=>{ if(!a.paused) a.pause(); }); },
+  resume(){
+    const a = this.active();
+    if(a && a.src && a.src.indexOf('data:')!==0 && a.paused){
+      try{ const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
+    }
+  }
 };
 
 /* ── 決定論的ノイズ ──────────────────────────────── */
@@ -1286,8 +1359,14 @@ function planetMaps(kind, hex, seed, id){
                 {la: 0.30,lo:5.10,rl:0.17,rt:0.07,c:[238,228,208],a:0.8},
                 {la:-0.64,lo:0.90,rl:0.12,rt:0.06,c:[234,222,200],a:0.7} ],
       saturn: [ {la: 0.34,lo:3.50,rl:0.22,rt:0.06,c:[242,230,198],a:0.6} ],
-      neptune:[ {la:-0.38,lo:1.70,rl:0.30,rt:0.10,c:[22,38,100],core:[12,24,76]},
-                {la:-0.28,lo:2.45,rl:0.10,rt:0.05,c:[228,238,248],a:0.75} ],
+      /* 海王星の大暗斑（2026-09-23 拡大）。従来は rl 0.30 / rt 0.10 / 色(22,38,100) で、
+         青い帯の中に埋もれて画面上ほぼ判別できなかった。Voyager 2 の写真どおり
+         「地球がそのまま入る」大きさと濃さにし、縁へ寄り添う明るいメタンの巻雲を足す。 */
+      neptune:[ {la:-0.38,lo:1.70,rl:0.50,rt:0.185,c:[14,27,82],core:[6,12,50]},
+                {la:-0.55,lo:1.58,rl:0.22,rt:0.055,c:[238,246,253],a:0.88},   // 渦の南縁の巻雲
+                {la:-0.24,lo:1.98,rl:0.14,rt:0.042,c:[230,240,251],a:0.72},   // 北縁の筋
+                {la:-0.28,lo:2.45,rl:0.12,rt:0.055,c:[232,242,252],a:0.80},   // スクーター
+                {la:-0.98,lo:4.30,rl:0.17,rt:0.075,c:[24,42,102],core:[13,25,74]} ],  // 小暗斑 D2
       uranus: []
     })[id] || [];
     for(const o of ovals) stampOval(D,W,H,o,s0);
@@ -1653,9 +1732,12 @@ function syncMuteBtn(){
 function unlockAudio(){
   Audio2.init();
   if(Audio2.ctx && Audio2.ctx.state === 'suspended') Audio2.ctx.resume();
+  BGM.prime();                                  // iOS はこの操作の中でしか通せない
+  BGM.setMuted(!Audio2.on);
 }
 function setPaused(v){
   PAUSED = !!v;
+  if(PAUSED) BGM.suspend(); else BGM.resume();
   const dlg = $('pauseDlg');
   if(!dlg) return;
   if(PAUSED){ try{ dlg.showModal(); }catch(e){ dlg.setAttribute('open',''); } }
@@ -1753,7 +1835,10 @@ function bindInput(){
   window.addEventListener('keydown', down); window.addEventListener('keyup', up);
   window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; });
   document.addEventListener('pointerdown', unlockAudio, { once:true });
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden && MODE!=='attract' && MODE!=='boot') setPaused(true); });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){ BGM.suspend(); if(MODE!=='attract' && MODE!=='boot') setPaused(true); }
+    else if(!PAUSED) BGM.resume();
+  });
 
   const el = renderer.domElement;
   let drag=false, lx=0, ly=0, pid=null;
@@ -1773,7 +1858,7 @@ function bindInput(){
     } else {
       IN.look.x += dx*0.0042; IN.look.y += dy*0.0035;
       IN.look.y = clamp(IN.look.y, -0.62, 0.95);
-      if(Math.abs(dy) > 1) G.skyGaze = false;      // 手で動かしたら自動の見上げを解除
+      if(Math.abs(dy) > 1){ G.skyGaze = false; G.skyReturn = false; }   // 手で動かしたら自動制御を解除
     }
     lx=e.clientX; ly=e.clientY;
   };
@@ -1958,7 +2043,7 @@ function makePlanet(b, radius){
 
 /* ── 待機（タイトル／星図の背景） ─────────────── */
 function buildAttract(){
-  newScene(null); MODE='attract'; setCam(1, 40000);
+  newScene(null); MODE='attract'; setCam(1, 40000); BGM.play('title');
   starField(2600, 9000, scene);
   addSun(new THREE.Vector3(-900,320,-1400), 1.2, 900, 0xfff0cf);
   const e = makePlanet(BY_ID.earth, 120); e.position.set(58,-26,-230); scene.add(e); G.globe=e;
@@ -1977,7 +2062,7 @@ function updAttract(dt){
 /* ── 航行 ─────────────────────────────────────── */
 function startCruise(bodyId){
   const b = BY_ID[bodyId]; CUR = b; CURSAT = false;
-  newScene(null); MODE='cruise'; setCam(1, 90000);
+  newScene(null); MODE='cruise'; setCam(1, 90000); BGM.play('cruise');
   G.body = b; G.dist0 = b.cruise; G.auto = false; G.speed = 90; G.t=0;
   starField(3000, 30000, scene);
   addSun(new THREE.Vector3(-4000,1200,-2000), b.id==='sun'?2.0:1.15, b.id==='sun'?0:2600, 0xfff0cf);
@@ -2094,12 +2179,18 @@ function makeMarker(color, size){
   const glow = glowSprite(color, size*2.5, 0.6); g.add(glow); g.userData.glow = glow;
   return g;
 }
+/* テクスチャに焼いた地物の真上へ観測目標を置くための対応表（2026-09-23）。
+   観測目標は従来 `spherePos(..., i*2.39)` の機械的な配置で、画面に描かれている
+   地物とは無関係な場所に浮いていた。大暗斑は自転で流れるので、位置は毎フレーム
+   球面から作り直す。`lon` は planetMaps 側のテクスチャ経度と同じ値を使う。 */
+/* r は惑星半径の倍数。1.28 だと接近時に「高度が低い」警告（R*1.12）に触れるため 1.45 */
+const SPOT_ANCHOR = { 'neptune:dark':{ la:-0.38, lo:1.70, r:1.45 } };
 function spherePos(r, lat, lon){
   return new THREE.Vector3(r*Math.cos(lat)*Math.cos(lon), r*Math.sin(lat), r*Math.cos(lat)*Math.sin(lon));
 }
 function enterOrbit(b){
   CUR = b; CURSAT = false;
-  newScene(null); MODE='orbit'; setCam(1, 90000);
+  newScene(null); MODE='orbit'; setCam(1, 90000); BGM.play('orbit');
   G.body = b; G.R = b.rad; G.speed = 40;
   starField(2800, 40000, scene);
   const sunDir = new THREE.Vector3(-1,0.32,-0.55).normalize().multiplyScalar(b.rad*46);
@@ -2120,6 +2211,7 @@ function enterOrbit(b){
     m.position.copy(spherePos(b.rad*(1.55+ (i%2)*0.35), Math.sin(i*1.7)*0.72, i*2.39));
     m.userData.rec = { key:b.id+':'+o.k, n:o.n, t:o.t, kind:'観測' };
     m.userData.done = done;
+    m.userData.anchor = SPOT_ANCHOR[b.id+':'+o.k] || null;   // 地物に貼り付く目標
     scene.add(m); G.marks.push(m);
   });
   G.ship = buildShip();
@@ -2156,6 +2248,13 @@ function updOrbit(dt){
     G.satAng += dt*0.035;
     G.sat.position.copy(spherePos(R*3.1, 0.18, G.satAng));
     G.sat.rotation.y += dt*0.02;
+  }
+  // 自転する地物（大暗斑）に貼り付いた目標は、毎フレーム位置を作り直す。
+  // 惑星の裏へ回っているあいだは惑星に隠れるので、斑が正面へ来るのを待つことになる
+  const gRot = G.planet.userData.globe.rotation.y;
+  for(const m of G.marks){
+    const a = m.userData.anchor; if(!a) continue;
+    m.position.copy(spherePos(R*a.r, a.la, Math.PI - (a.lo + gRot)));
   }
   // 目標との判定
   let near=null, nd=1e9;
@@ -2238,6 +2337,7 @@ function act(kind){
   if(kind==='skygaze'){
     if(MODE==='surface'){
       G.skyGaze = !G.skyGaze;
+      G.skyReturn = !G.skyGaze;                 // 解除したら地表の高さへ戻す
       toast('視点', G.skyGaze?'空を見上げる':'視点を戻す',
             G.skyGaze? '左右で向きを変え、的を画面に入れて撮影' : '', true);
     }
@@ -2308,6 +2408,7 @@ function checkSkyShot(){
   const r = G.skyShot;
   if(mark(r.key)){
     G.skyShot = null; hideSkyLabel();
+    if(G.skyGaze){ G.skyGaze = false; G.skyReturn = true; }   // 撮れたら自動で視線を戻す
     toast('観測', r.n, r.t, false); materialToast(r.key); Audio2.chord([523,698,880]);
     updMapPct(); checkComplete();
   }
@@ -2353,6 +2454,8 @@ const SURF_TEMP = { earth:'+48 ℃', moon:'+110 ℃', mercury:'−173 ℃', venu
 /* 視点を上へ振り切ったときの仰角(rad)。空の親星は仰角 0.34（木星）〜0.40（土星）に
    置いてあるので、少し上の 0.50 を向けば的が画面の中ほどに入る */
 const SKY_AIM = 0.50;
+const SKY_GAZE_PITCH = 0.95;      // 「空を見る」中の仰角（clamp の上限と同じ）
+const SURF_PITCH = 0.13;          // 地表の既定の仰角（buildSurface の初期値と同じ）
 const SKYSHOT = {
   moon:{ from:'moon', k:'rise', aim:'parent' }, mercury:{ from:'mercury', k:'big', aim:'sun' },
   mars:{ from:'mars', k:'dusk', aim:'sun' },
@@ -2687,9 +2790,10 @@ function buildSurface(obj, isSat){
   if(airless) scene.fog = new THREE.Fog(0x05070e, cfg.fogNear, cfg.fogFar);
   setCam(0.5, 4200);
   MODE='surface'; CURSAT = !!isSat; G.obj = obj; G.cfg = cfg; G.grav = GRAV[obj.id] || 9;
+  BGM.play('surface');
   G.jumpNoted = 0; G.rocks = []; G.geysers = []; G.weather = null; G.haze = null;
   G.shake = G.shake || new THREE.Vector3(); G.shake.set(0,0,0);
-  G.skyGaze = false;
+  G.skyGaze = false; G.skyReturn = false;
 
   if(cfg.star>0) starField(1400, 1200, scene).material.opacity = cfg.star;
   if(!airless) scene.add(gradientSky(cfg.sky[0], cfg.sky[1]));
@@ -2888,7 +2992,13 @@ function updSurface(dt){
   // 視点（ドラッグ／矢印で回す）
   // 「空を見る」中は仰角を自動で振り切る。ドラッグは下方向で見上げる操作なので、
   // 説明どおりに上へドラッグすると逆に下を向いてしまい、空の記録に辿り着けなかった。
-  if(G.skyGaze) IN.look.y = lerp(IN.look.y, 0.95, clamp(dt*5,0,1));
+  // 解除したら既定の仰角 0.13 へ戻す（戻す処理が無く、上を向いたまま戻せなかった）
+  if(G.skyGaze){
+    IN.look.y = lerp(IN.look.y, SKY_GAZE_PITCH, clamp(dt*5,0,1));
+  } else if(G.skyReturn){
+    IN.look.y = lerp(IN.look.y, SURF_PITCH, clamp(dt*5,0,1));
+    if(Math.abs(IN.look.y - SURF_PITCH) < 0.012){ IN.look.y = SURF_PITCH; G.skyReturn = false; }
+  }
   const yaw = IN.look.x, pitch = IN.look.y;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const rx = Math.cos(yaw), rz = -Math.sin(yaw);
@@ -3017,7 +3127,7 @@ function updSurface(dt){
     l3:'発見', v3:got+' / '+all, bar: all? got/all*100 : 100 });
   const acts = [];
   if(G.nearFind) acts.push({l:'記録する', k:'E', f:()=>act('record')});
-  if(G.skyShot) acts.push({l: G.skyGaze?'視点を戻す':'空を見る', k:'Q', f:()=>act('skygaze')});
+  if(G.skyShot || G.skyGaze) acts.push({l: G.skyGaze?'視点を戻す':'空を見る', k:'Q', f:()=>act('skygaze')});
   acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
   acts.push({l:'船に戻る', k:'SELECT', f:()=>enterOrbit(CUR)});
   setActions(acts);
