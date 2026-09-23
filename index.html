@@ -4102,6 +4102,12 @@ function moundGeometry(R, H, prof, seg, amp, phase){
   pos.needsUpdate = true; geo.computeVertexNormals();
   return geo;
 }
+/* その星でのジャンプ到達高(m)。跳躍処理と滞空姿勢の両方が同じ値を見る。
+   低重力ほど高く長く浮く: 地球0.60 / 火星1.09 / 月1.82 / エウロパ2.19 / ミランダ2.82 */
+function jumpHeightNow(){
+  const base = G.rover ? 0.42 : 0.6;
+  return base * clamp(Math.pow(GRAV.earth/(G.grav||9), 0.62), 0.85, 4.7);
+}
 function buildSurface(obj, isSat){
   const cfgName = obj.surf, cfg = SURF[cfgName];
   const seed = (obj.id.charCodeAt(0)*3 + obj.id.length)%17;
@@ -4554,8 +4560,9 @@ function updSurface(dt){
     // 指数 0.38→0.62 に上げ、星ごとの差を目で見て分かる幅にした（2026-09-22）。
     // 地球 0.60m / 火星 1.09m / 月 1.82m / エウロパ 2.19m / ミランダ 2.82m（上限）
     const base = G.rover ? 0.42 : 0.6;
-    const jumpHeight = base*clamp(Math.pow(earthG/G.grav, 0.62), 0.85, 4.7);
+    const jumpHeight = jumpHeightNow();
     pl.vy = Math.sqrt(2*G.grav*jumpHeight); pl.ground=false; IN.jump=false;
+    G.jumpV0 = pl.vy;           // 滞空姿勢で「上昇中か落下中か」を測る基準にする
     Audio2.blip(180+G.grav*8, 0.14, 'triangle');
     // その星で初めて跳んだときだけ、地球との差を数字で言う
     if(!G.jumpNoted){
@@ -4622,8 +4629,49 @@ function updSurface(dt){
     const floatAmt = 1.0 + (1.0 - gN)*0.9;
     ga.body.position.y = (Math.abs(Math.cos(u)) - 0.5) * sp*0.15*floatAmt;
     ga.body.rotation.y = ph*0.16;
-    // 背嚢が重いぶん前傾する。低重力ほど深い（重心が後ろへ逃げるのを押さえる姿勢）
-    ga.body.rotation.x = -clamp(moving*0.013, 0, 0.11) * (1.35 - gN*0.35);
+    /* 背嚢が重いぶん前傾する。直立した体では **正** の X 回転が前傾（頭が +Z へ出る）。
+       追補6では負を入れていて、実際には後傾していた（膝とは符号が逆になる。
+       膝は子が下へ垂れているので正が後ろ、胴は頭が上にあるので正が前） */
+    ga.body.rotation.x = clamp(moving*0.013, 0, 0.11) * (1.35 - gN*0.35);
+
+    /* ── 滞空（ジャンプ）姿勢 ────────────────────────────
+       歩行の姿勢へ上書きするのではなく、滞空度 A で混ぜる。着地の瞬間に
+       パキッと切り替わると、低重力ほど長い滞空が「固まった人形」に見える。
+       上昇中は脚を後ろへ流して前傾＝飛んでいる姿勢、落下中は脚を前へ出して
+       膝を畳み、腕を横へ開く＝着地に備える姿勢。両者を vy で連続に混ぜる。 */
+    if(ga.armZ === undefined) ga.armZ = ga.arms.map(a=>a.rotation.z);   // 肩の開きの素値
+    /* 滞空度は `pl.ground` で測ってはいけない。低重力では地形の起伏を越えるたびに
+       一瞬浮くため、エウロパ実測では移動中ほぼ常時 ground=false（滞空度0.93〜1.0）になり、
+       歩行の姿勢がまったく出なくなる。跳躍到達高に対する「地面からの高さの割合」で測る。
+       0.16倍までは無反応（起伏の浮き）、0.58倍で滞空姿勢が全開。 */
+    const jh = Math.max(0.3, jumpHeightNow());
+    const hAir = Math.max(0, pl.y - contactHeight(pl.x, pl.z, climb));
+    ga.air = lerp(ga.air||0, clamp((hAir/jh - 0.16)/0.42, 0, 1), clamp(dt*9,0,1));
+    const A = ga.air;
+    if(A > 0.002){
+      const v0 = Math.max(G.jumpV0||0, 1e-3);
+      const k  = clamp(pl.vy/v0, -1, 1)*0.5 + 0.5;       // 1=上昇の頂点側 / 0=落下
+      const mix = (fall, rise) => fall + (rise-fall)*k;
+      const lean  = mix(0.17, 0.46);
+      const hip   = [mix(-0.32, 0.54), mix(-0.17, 0.28)];
+      const knee  = [mix( 0.58, 0.32), mix( 0.42, 0.14)];
+      const arm   = [mix(-0.34,-0.88), mix(-0.16,-0.60)];
+      const spread= mix(0.52, 0.34);
+      const elbow = mix(-0.55,-0.28);
+      for(let i=0;i<2;i++){
+        const d = i ? -1 : 1;
+        ga.legs[i].rotation.x   = lerp(ga.legs[i].rotation.x,   hip[i],   A);
+        ga.knees[i].rotation.x  = lerp(ga.knees[i].rotation.x,  knee[i],  A);
+        ga.arms[i].rotation.x   = lerp(ga.arms[i].rotation.x,   arm[i],   A);
+        ga.arms[i].rotation.z   = lerp(ga.armZ[i], ga.armZ[i] + d*spread, A);
+        ga.elbows[i].rotation.x = lerp(ga.elbows[i].rotation.x, elbow,    A);
+      }
+      ga.body.rotation.x = lerp(ga.body.rotation.x, lean, A);
+      ga.body.rotation.y = lerp(ga.body.rotation.y, 0, A);
+      ga.body.position.y = lerp(ga.body.position.y, 0, A);
+    } else {
+      for(let i=0;i<2;i++) ga.arms[i].rotation.z = ga.armZ[i];
+    }
   }
   if(G.contactShadow){
     const sh=contactHeight(pl.x,pl.z,climb);
