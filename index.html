@@ -598,8 +598,12 @@ const SURF = {
   /* 2026-09-23 金星：谷（地溝）を刻み、雷と地鳴りを起こす */
   cloud:{ ground:[0xa4653a,0xba8050], rock:0x8c4f28, sky:[0x3d1207,0x8f3313], fogNear:50, fogFar:300,
          amb:0.58, sun:0.8, rough:1.6, scale:0.011, craters:0, props:'platform', star:0, storm:1 },
-  rocky:{ ground:[0xa4562f, 0xc07a45], rock:0x7d4526, sky:[0x2a1b16,0xc9a184], fogNear:140, fogFar:620,
-         amb:0.4, sun:1.5, rough:4.2, scale:0.013, craters:9, props:'ice', star:0.35 },
+  /* 2026-09-23 火星：地表を酸化鉄の赤茶へ寄せ、大気を薄青にした（タイタン指示）。
+     sky[1] はフォグ色と半球光の上側色を兼ねるため、遠景ほど赤茶が薄青へ沈む。
+     オリンポス山を地平線に置くので fogFar を 620→1150 に伸ばしてある。 */
+  rocky:{ ground:[0x702a0e, 0x9a4520], rock:0x57230d, sky:[0x3c6182,0xa9c7df], fogNear:180, fogFar:1150,
+         amb:0.4, sun:1.5, rough:4.2, scale:0.013, craters:9, props:'ice', star:0.12,
+         valles:1, olympus:1, marsWx:1 },
   ice:{ ground:[0xcfe0ea,0xa9c4d6], rock:0x8fb0c4, sky:[0x000000,0x000000], fogNear:340, fogFar:820,
          amb:0.22, sun:1.05, rough:2.0, scale:0.02, craters:6, props:'shard', star:1 },
   dune:{ ground:[0xb07038,0x8d5527], rock:0x6f4520, sky:[0x5a3210,0xd89a4e], fogNear:80, fogFar:380,
@@ -1024,6 +1028,15 @@ function heightAt(x,z){
     h += riftCut(x,z,s, 1.15,   24, 2.2,  6);
     h += riftCut(x,z,s,-1.05,   96, 2.9,  8);
     h += riftCut(x,z,s, 2.35, -120, 2.0,  5);
+  }
+  if(TER.name==='rocky'){
+    // 火星：マリネリス峡谷（2026-09-23）。本谷1本＋外側の支谷1本＋横切る枝谷1本。
+    // 着陸地点（原点半径26が平坦化される）を谷が割らないよう、中心線の最寄り距離を実測で確保する。
+    // riftCut の蛇行 wob は最大 ±46 なので「|off| − 46 − width」が最寄り距離になる。
+    //   本谷 128−46−50 = 32 ／ 枝谷 132−46−20 = 66（どちらも 26 より外）
+    h += riftCut(x,z,s, 0.38, -128, 32, 50);   // 本谷。深さ32・幅50＝谷底まで歩いて降りられる
+    h += riftCut(x,z,s, 0.22, -206, 15, 26);   // 外側の支谷（歩ける範囲の縁。遠景の壁になる）
+    h += riftCut(x,z,s, 1.55,  132, 12, 20);   // 反対側を横切る枝谷
   }
   for(let i=0;i<TER.craters.length;i++){
     const cr = TER.craters[i], dx = x-cr.x, dz = z-cr.z, d = Math.sqrt(dx*dx+dz*dz);
@@ -2544,6 +2557,9 @@ const SURF_TEMP = { earth:'+48 ℃', moon:'+110 ℃', mercury:'−173 ℃', venu
 const SKY_AIM = 0.50;
 const SKY_GAZE_PITCH = 0.95;      // 「空を見る」中の仰角（clamp の上限と同じ）
 const SURF_PITCH = 0.13;          // 地表の既定の仰角（buildSurface の初期値と同じ）
+/* オリンポス山の方角（固定）。毎回同じ向きに見えるから「地標」として機能する */
+const OLYMPUS_AZ = 1.95;   // 太陽（方位 −0.92）の逆側。逆光で溶けないようにする
+const angDiff = (a,b)=>{ let d=(a-b)%TAU; if(d>Math.PI) d-=TAU; if(d<-Math.PI) d+=TAU; return d; };
 /* いま見上げているか。フラグではなく実際の仰角で判定する。
    ドラッグで視点を変えると自動制御のフラグが落ちるため、フラグで
    ボタンの文言と動作を決めていると「見上げたままなのに［空を見る］表示」になり、
@@ -2904,6 +2920,101 @@ function updHaze(dt){
   h.geometry.attributes.position.needsUpdate = true;
 }
 
+/* ── 火星の天候（2026-09-23 タイタン指示）──────────────────────
+   ダストストーム＝3分に1回・雪＝5分に1回。粒子と「視程」の2つで表す。
+   視程はフォグを一時的に詰める。基準値（SURF の fogNear/fogFar と色）を
+   G.marsWx に控えておき、天候が抜けたら必ずそこへ戻す。
+   初回だけ間隔より早く来る（dust 22秒 / snow 52秒）。3分・5分を律儀に待つと
+   最初の滞在で一度も見ないまま船へ戻ることになるため、発見のための例外。 */
+const MARS_WX = {
+  // fall は m/s（そのまま高さに足す）。wind は横の流速 m/s。
+  dust:{ every:180, first:22, dur:26, n:3000, color:0xb86234, size:1.3, opacity:0.5,
+         area:40, high:24, fall:-2.0, wind:46, fogNear:5, fogFar:84, sun:0.28,
+         kind:'砂嵐', name:'ダストストーム', text:'視界が赤く濁る。塵が太陽を隠している。' },
+  snow:{ every:300, first:52, dur:34, n:1800, color:0xeef6ff, size:1.5, opacity:0.95,
+         area:38, high:40, fall:-2.4, wind:5.0, fogNear:60, fogFar:400, sun:0.8,
+         kind:'降雪', name:'二酸化炭素の雪', text:'落ちてくる粒が乾いている。融けずに砂へ紛れる。' }
+};
+/* 粒を四角い点のままにすると「板が浮いている」ようにしか見えない。
+   放射グラデーションの丸を1枚作って全部で共有する（2026-09-23 実測で差し替え）。 */
+let SOFT_DOT = null;
+function softDotTexture(){
+  if(SOFT_DOT) return SOFT_DOT;
+  const cv = mkCv(32,32), g = cv.getContext('2d');
+  const rg = g.createRadialGradient(16,16,0, 16,16,16);
+  rg.addColorStop(0,'rgba(255,255,255,1)');
+  rg.addColorStop(0.45,'rgba(255,255,255,0.72)');
+  rg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0,0,32,32);
+  SOFT_DOT = new THREE.CanvasTexture(cv); return SOFT_DOT;
+}
+function makeMarsField(sp){
+  const geo = new THREE.BufferGeometry(), arr = new Float32Array(sp.n*3), st = [];
+  for(let i=0;i<sp.n;i++){
+    // 高さは二乗で偏らせる＝地面に近いほど濃い（砂嵐も雪も下層が濃い）
+    st.push({ ox:(Math.random()-0.5)*sp.area*2, oz:(Math.random()-0.5)*sp.area*2,
+              h:Math.pow(Math.random(),1.8)*sp.high, v:0.55+Math.random()*0.95 });
+    arr[i*3+1] = -999;                                   // 最初は地面の下＝不可視
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(arr,3));
+  const pt = new THREE.Points(geo, new THREE.PointsMaterial({ color:sp.color, size:sp.size,
+    map:softDotTexture(), transparent:true, opacity:0, depthWrite:false }));
+  pt.frustumCulled = false; pt.userData = { sp, st };
+  return pt;
+}
+function updMarsWx(dt){
+  const w = G.marsWx; if(!w || !G.pl) return;
+  const pl = G.pl;
+  for(let n=0;n<w.list.length;n++){
+    const s = w.list[n], sp = s.sp;
+    if(s.on){
+      s.t -= dt;
+      if(s.t <= 0){ s.on = false; s.next = sp.every*(0.9+Math.random()*0.2); }
+    }else{
+      s.next -= dt;
+      if(s.next <= 0){
+        s.on = true; s.t = sp.dur; s.gust = 0;
+        toast(sp.kind, sp.name, sp.text, true);
+      }
+    }
+    // 包絡：立ち上がりは速く、引きは緩く（天候が切り替わる瞬間を見せる）
+    s.k += ((s.on?1:0) - s.k) * clamp(dt*(s.on?0.55:0.3), 0, 1);
+    s.pt.material.opacity = sp.opacity * s.k;
+    if(s.k < 0.004){ s.pt.visible = false; continue; }
+    s.pt.visible = true;
+    // 風の音。砂嵐のときだけ、突風を不規則に重ねる
+    if(sp.sun < 0.5 && s.on){
+      s.gust -= dt;
+      if(s.gust <= 0){ Audio2.noise(1.1+Math.random()*1.2, 0.05+Math.random()*0.05);
+                       s.gust = 0.9+Math.random()*1.5; }
+    }
+    // 粒子はプレイヤー中心の箱で循環させる（位置はプレイヤーからの相対で持つ）
+    const arr = s.pt.geometry.attributes.position.array, st = s.pt.userData.st;
+    const A = sp.area, drift = sp.wind*dt;
+    for(let i=0;i<st.length;i++){
+      const q = st[i];
+      q.ox += drift*q.v; q.oz += drift*q.v*0.32; q.h += sp.fall*q.v*dt;
+      if(q.ox >  A) q.ox -= A*2; else if(q.ox < -A) q.ox += A*2;
+      if(q.oz >  A) q.oz -= A*2; else if(q.oz < -A) q.oz += A*2;
+      if(q.h < 0) q.h += sp.high;
+      const x = pl.x+q.ox, z = pl.z+q.oz;
+      arr[i*3] = x; arr[i*3+1] = meshHeightAt(x,z)+q.h; arr[i*3+2] = z;
+    }
+    s.pt.geometry.attributes.position.needsUpdate = true;
+  }
+  // 視程と日射。基準値へ必ず戻せるよう、毎フレーム基準から作り直す
+  const kd = w.list[0].k, ks = w.list[1].k;
+  if(scene.fog){
+    scene.fog.near = lerp(lerp(w.baseNear, MARS_WX.snow.fogNear, ks), MARS_WX.dust.fogNear, kd);
+    scene.fog.far  = lerp(lerp(w.baseFar,  MARS_WX.snow.fogFar,  ks), MARS_WX.dust.fogFar,  kd);
+    scene.fog.color.copy(w.baseFogCol).lerp(w.dustFogCol, kd*0.9);
+  }
+  if(w.sun) w.sun.intensity = w.baseSun * lerp(lerp(1, MARS_WX.snow.sun, ks), MARS_WX.dust.sun, kd);
+  if(w.sunSprite) w.sunSprite.material.opacity = 0.95 * lerp(1, 0.15, Math.max(kd, ks*0.5));
+  // 空メッシュは fog:false（フォグが効かない）。天候中は自分で色を掛けて濁らせる
+  if(w.sky){ w.sky.material.color.setRGB(1,1,1).lerp(w.skySnow, ks*0.85).lerp(w.skyDust, kd); }
+}
+
 /* ── 構造物の当たり判定（2026-09-23 新設）────────────────────
    発見物の構造物（整備塔・ドーム・中央丘・モノリス・氷柱など）と着陸船は
    見た目だけのメッシュで、キャラクターがそのまま通り抜け／めり込んでいた。
@@ -2980,11 +3091,12 @@ function buildSurface(obj, isSat){
   MODE='surface'; CURSAT = !!isSat; G.obj = obj; G.cfg = cfg; G.grav = GRAV[obj.id] || 9;
   BGM.play('surface');
   G.jumpNoted = 0; G.rocks = []; G.geysers = []; G.weather = null; G.haze = null;
+  G.marsWx = null; G.olympus = null; G.skyMesh = null;
   G.shake = G.shake || new THREE.Vector3(); G.shake.set(0,0,0);
   G.skyGaze = false; G.skyReturn = false;
 
   if(cfg.star>0) starField(1400, 1200, scene).material.opacity = cfg.star;
-  if(!airless) scene.add(gradientSky(cfg.sky[0], cfg.sky[1]));
+  if(!airless){ G.skyMesh = gradientSky(cfg.sky[0], cfg.sky[1]); scene.add(G.skyMesh); }
 
   const sunDir = new THREE.Vector3(0.55,0.42,-0.72).normalize().multiplyScalar(900);
   const sl = new THREE.DirectionalLight(0xfff1d8, cfg.sun); sl.position.copy(sunDir); scene.add(sl);
@@ -3010,9 +3122,27 @@ function buildSurface(obj, isSat){
   }
   if(cfgName==='dune'||cfgName==='rocky'){ // 遠景の丘
     for(let i=0;i<9;i++){ const a=Math.random()*TAU, d=300+Math.random()*180;
+      // オリンポス山の方角には丘を置かない（裾野に小山が刺さって縮尺が壊れる）
+      if(cfg.olympus && Math.abs(angDiff(a, OLYMPUS_AZ)) < 0.75) continue;
       const h=22+Math.random()*40;
       const m=new THREE.Mesh(new THREE.ConeGeometry(50+Math.random()*60,h,6), rm);
       m.position.set(Math.cos(a)*d, h*0.3, Math.sin(a)*d); scene.add(m); }
+  }
+  /* ── オリンポス山（2026-09-23）────────────────────────────
+     歩ける範囲は半径215、地形メッシュは一辺480（半径240）しかないので、
+     山は地形の外側に置く「地標」として作る。断面（裾は緩く、基部に急崖、
+     山頂にカルデラ）を Lathe で回した盾状火山。低ポリ（周11分割）で他の岩と質感を揃える。
+     距離820・フォグ180〜1150 のため 6割ほど霞に沈み、大きさが距離として読める。 */
+  if(cfg.olympus){
+    const R = 600, H = 292;
+    const prof = [ [1.00,0], [0.965,0.10], [0.82,0.29], [0.58,0.55],
+                   [0.33,0.80], [0.155,0.975], [0.118,0.845], [0.0,0.815] ];
+    const pts = prof.map(p=>new THREE.Vector2(Math.max(p[0]*R, 0.01), p[1]*H));
+    const mons = new THREE.Mesh(new THREE.LatheGeometry(pts, 11),
+      new THREE.MeshStandardMaterial({ color:0x9c4a22, roughness:0.98, flatShading:true }));
+    mons.position.set(Math.cos(OLYMPUS_AZ)*860, -42, Math.sin(OLYMPUS_AZ)*860);
+    mons.rotation.y = 0.4;
+    scene.add(mons); G.olympus = mons;
   }
 
   // 発見目標＋構造物
@@ -3074,6 +3204,17 @@ function buildSurface(obj, isSat){
   }
   // 温暖化した地球：熱の霞
   if(cfg.heat){ G.haze = makeHaze(); scene.add(G.haze); }
+  // 火星：ダストストームと雪
+  if(cfg.marsWx){
+    const mk = k=>{ const sp=MARS_WX[k], pt=makeMarsField(sp); pt.visible=false; scene.add(pt);
+                    return { sp, pt, on:false, k:0, t:0, gust:0, next:sp.first }; };
+    G.marsWx = { list:[mk('dust'), mk('snow')],
+                 baseNear:cfg.fogNear, baseFar:cfg.fogFar,
+                 baseFogCol:scene.fog ? scene.fog.color.clone() : new THREE.Color(cfg.sky[1]),
+                 dustFogCol:new THREE.Color(0x9a5530),
+                 sun:sl, baseSun:cfg.sun, sunSprite:G.sunSprite, sky:G.skyMesh,
+                 skyDust:new THREE.Color(0xb0704a), skySnow:new THREE.Color(0xc9ced6) };
+  }
 
   // 空に向けた撮影で埋まる記録
   const ss = SKYSHOT[obj.id];
@@ -3290,7 +3431,7 @@ function updSurface(dt){
   const ground = meshHeightAt(cx,cz)+1.2;
   camera.position.lerp(new THREE.Vector3(cx, Math.max(cy,ground), cz), clamp(dt*7,0,1));
   // 環境演出（噴出・雷・地鳴り・熱霞）。揺れはカメラへ最後に足す
-  updGeysers(dt); updHaze(dt);
+  updGeysers(dt); updHaze(dt); updMarsWx(dt);
   if(G.shake) G.shake.set(0,0,0);
   updWeather(dt);
   if(G.shake) camera.position.add(G.shake);
