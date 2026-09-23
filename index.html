@@ -603,10 +603,12 @@ const SURF = {
      オリンポス山を地平線に置くので fogFar を 620→1150 に伸ばしてある。 */
   rocky:{ ground:[0x702a0e, 0x9a4520], rock:0x57230d, sky:[0x3c6182,0xa9c7df], fogNear:180, fogFar:1150,
          amb:0.4, sun:1.5, rough:4.2, scale:0.013, craters:9, props:'ice', star:0.12,
-         valles:1, olympus:1, marsWx:1 },
+         valles:1, olympus:1 },
   ice:{ ground:[0xcfe0ea,0xa9c4d6], rock:0x8fb0c4, sky:[0x000000,0x000000], fogNear:340, fogFar:820,
          amb:0.22, sun:1.05, rough:2.0, scale:0.02, craters:6, props:'shard', star:1 },
-  dune:{ ground:[0xb07038,0x8d5527], rock:0x6f4520, sky:[0x5a3210,0xd89a4e], fogNear:80, fogFar:380,
+  /* 2026-09-23 タイタン：エメラルドの星（タイタン指示）。橙の霞から深緑へ振り、
+     メタンの湖（LAKES.dune）を3つ置いた。5分に1回・1分間のメタンの霧雨は WX.dune。 */
+  dune:{ ground:[0x3d6a4c,0x6e9f6a], rock:0x2c4b37, sky:[0x0a271e,0x5da882], fogNear:80, fogFar:380,
          amb:0.55, sun:0.7, rough:5.0, scale:0.009, craters:0, props:'lake', star:0 },
   /* 2026-09-23 イオ：硫黄の火山世界。大気なし。黄〜橙の地面に硫黄の噴煙 */
   sulfur:{ ground:[0xa8801c, 0xe0c45c], rock:0x7a4610, sky:[0x000000,0x000000], fogNear:380, fogFar:900,
@@ -861,6 +863,28 @@ const Audio2 = {
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t+(dur||0.3)+0.05);
   },
   chord(list){ if(!this.on) return; list.forEach((f,i)=>setTimeout(()=>this.blip(f,0.55,'triangle'), i*110)); },
+  /* 連続音の「ざー」。一発ごとの noise() では雨にならないので、
+     4秒のピンクノイズをループさせて音量だけ動かす（2026-09-23 タイタンのメタン雨）。 */
+  rain:null, rainGain:null,
+  rainSet(vol){
+    if(!this.ctx) return;
+    if(!this.rain){
+      const n = Math.floor(this.ctx.sampleRate*4);
+      const buf = this.ctx.createBuffer(1,n,this.ctx.sampleRate), d = buf.getChannelData(0);
+      let last = 0;
+      for(let i=0;i<n;i++){ const w = Math.random()*2-1; last = (last + 0.055*w)/1.055; d[i] = last*3.4; }
+      // 継ぎ目を消す：末尾0.2秒を先頭へクロスフェード
+      const f = Math.floor(this.ctx.sampleRate*0.2);
+      for(let i=0;i<f;i++){ const k=i/f; d[i] = d[i]*k + d[n-f+i]*(1-k); }
+      const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const bp = this.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2100; bp.Q.value=0.34;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      src.connect(bp); bp.connect(g); g.connect(this.master); src.start();
+      this.rain = src; this.rainGain = g;
+    }
+    this.rainGain.gain.value = this.on ? vol : 0;
+  },
+  rainOff(){ if(this.rainGain) this.rainGain.gain.value = 0; },
   noise(dur, vol){
     if(!this.ctx||!this.on) return;
     const n = Math.floor(this.ctx.sampleRate*dur), buf = this.ctx.createBuffer(1,n,this.ctx.sampleRate), d = buf.getChannelData(0);
@@ -1065,6 +1089,11 @@ function riftCut(x,z,s,ang,off,depth,width){
 /* 亀裂・溝の定義 [向き, 中心線のずれ, 幅, 深さ]。
    地形を掘る（riftCut）のと、その溝に色を塗る（crackAt）のを同じ表から作る。
    別々に持つと「色はあるのに溝が無い」「溝はあるのに色が無い」が必ず起きる。 */
+/* 湖 [中心x, 中心z, 半径, 深さ]。地形に椀状のくぼみを掘り、
+   その底から depth*0.55 の高さに液面の円盤を置く（buildSurface 側）。 */
+const LAKES = {
+  dune:[ [-96, 62, 46, 8], [ 78,-112, 36, 7], [132, 98, 30, 6] ]
+};
 const CRACKS = {
   // エンケラドス：南極のタイガーストライプ。ほぼ平行な4本
   tiger:[[0.16,-34,7,3.0],[0.16,-6,6,2.6],[0.16,22,7,2.8],[0.16,52,6,2.4]],
@@ -1109,6 +1138,11 @@ function heightAt(x,z){
     h += riftCut(x,z,s, 1.15,   24, 2.2,  6);
     h += riftCut(x,z,s,-1.05,   96, 2.9,  8);
     h += riftCut(x,z,s, 2.35, -120, 2.0,  5);
+  }
+  const lk = LAKES[TER.name];
+  if(lk) for(let i=0;i<lk.length;i++){
+    const L=lk[i], dd=Math.hypot(x-L[0], z-L[1]);
+    if(dd < L[2]) h -= L[3]*Math.pow(Math.cos(dd/L[2]*Math.PI/2), 1.4);   // なめらかな椀
   }
   if(TER.cfg.crack){
     // 亀裂は CRACKS の表どおりに掘る（色を塗る crackAt と必ず同じ線になる）
@@ -3075,21 +3109,31 @@ function updHaze(dt){
   h.geometry.attributes.position.needsUpdate = true;
 }
 
-/* ── 火星の天候（2026-09-23 タイタン指示）──────────────────────
-   ダストストーム＝3分に1回・雪＝5分に1回。粒子と「視程」の2つで表す。
-   視程はフォグを一時的に詰める。基準値（SURF の fogNear/fogFar と色）を
-   G.marsWx に控えておき、天候が抜けたら必ずそこへ戻す。
-   初回だけ間隔より早く来る（dust 22秒 / snow 52秒）。3分・5分を律儀に待つと
-   最初の滞在で一度も見ないまま船へ戻ることになるため、発見のための例外。 */
-const MARS_WX = {
-  // fall は m/s（そのまま高さに足す）。wind は横の流速 m/s。
+/* ── 地表の天候（2026-09-23 タイタン指示）──────────────────────
+   火星＝ダストストーム3分に1回・雪5分に1回。タイタン＝メタンの霧雨5分に1回・1分間。
+   粒子と「視程」の2つで表す。視程はフォグを一時的に詰める。基準値（SURF の
+   fogNear/fogFar と色）を G.wx に控えておき、天候が抜けたら必ずそこへ戻す。
+   初回だけ間隔より早く来る。3分・5分を律儀に待つと、最初の滞在で一度も見ないまま
+   船へ戻ることになるため、発見のための例外。
+   fall は m/s（そのまま高さに足す）、wind は横の流速 m/s。 */
+const WX_FOG = new THREE.Color(), WX_SKY = new THREE.Color();
+const WX_KIND = {
   dust:{ every:180, first:22, dur:26, n:3000, color:0xb86234, size:1.3, opacity:0.5,
          area:40, high:24, fall:-2.0, wind:46, fogNear:5, fogFar:84, sun:0.28,
+         fogCol:0x9a5530, skyTint:0xb0704a, gust:1,
          kind:'砂嵐', name:'ダストストーム', text:'視界が赤く濁る。塵が太陽を隠している。' },
   snow:{ every:300, first:52, dur:34, n:1800, color:0xeef6ff, size:1.5, opacity:0.95,
          area:38, high:40, fall:-2.4, wind:5.0, fogNear:60, fogFar:400, sun:0.8,
-         kind:'降雪', name:'二酸化炭素の雪', text:'落ちてくる粒が乾いている。融けずに砂へ紛れる。' }
+         skyTint:0xc9ced6,
+         kind:'降雪', name:'二酸化炭素の雪', text:'落ちてくる粒が乾いている。融けずに砂へ紛れる。' },
+  // タイタン：メタンの霧雨。厚い大気と0.14Gで、雨粒は地球の6分の1の速さで落ちる
+  drizzle:{ every:300, first:40, dur:60, n:4200, color:0xaad8bb, size:0.42, opacity:0.55,
+         area:30, high:42, fall:-1.8, wind:3.2, fogNear:18, fogFar:165, sun:0.62,
+         fogCol:0x3f6f57, skyTint:0x93c2a4, rain:0.085,
+         kind:'降雨', name:'メタンの霧雨', text:'顔に当たっても冷たさが分からない。摂氏マイナス百七十九度の雨。' }
 };
+/* どの地表にどの天候が出るか */
+const WX = { rocky:['dust','snow'], dune:['drizzle'] };
 /* 粒を四角い点のままにすると「板が浮いている」ようにしか見えない。
    放射グラデーションの丸を1枚作って全部で共有する（2026-09-23 実測で差し替え）。 */
 let SOFT_DOT = null;
@@ -3103,7 +3147,7 @@ function softDotTexture(){
   g.fillStyle = rg; g.fillRect(0,0,32,32);
   SOFT_DOT = new THREE.CanvasTexture(cv); return SOFT_DOT;
 }
-function makeMarsField(sp){
+function makeWxField(sp){
   const geo = new THREE.BufferGeometry(), arr = new Float32Array(sp.n*3), st = [];
   for(let i=0;i<sp.n;i++){
     // 高さは二乗で偏らせる＝地面に近いほど濃い（砂嵐も雪も下層が濃い）
@@ -3117,8 +3161,8 @@ function makeMarsField(sp){
   pt.frustumCulled = false; pt.userData = { sp, st };
   return pt;
 }
-function updMarsWx(dt){
-  const w = G.marsWx; if(!w || !G.pl) return;
+function updWeatherFx(dt){
+  const w = G.wx; if(!w || !G.pl) return;
   const pl = G.pl;
   for(let n=0;n<w.list.length;n++){
     const s = w.list[n], sp = s.sp;
@@ -3137,8 +3181,8 @@ function updMarsWx(dt){
     s.pt.material.opacity = sp.opacity * s.k;
     if(s.k < 0.004){ s.pt.visible = false; continue; }
     s.pt.visible = true;
-    // 風の音。砂嵐のときだけ、突風を不規則に重ねる
-    if(sp.sun < 0.5 && s.on){
+    // 突風の音（砂嵐だけ）。雨の「ざー」は連続音なので下の rainSet が担当する
+    if(sp.gust && s.on){
       s.gust -= dt;
       if(s.gust <= 0){ Audio2.noise(1.1+Math.random()*1.2, 0.05+Math.random()*0.05);
                        s.gust = 0.9+Math.random()*1.5; }
@@ -3157,17 +3201,26 @@ function updMarsWx(dt){
     }
     s.pt.geometry.attributes.position.needsUpdate = true;
   }
-  // 視程と日射。基準値へ必ず戻せるよう、毎フレーム基準から作り直す
-  const kd = w.list[0].k, ks = w.list[1].k;
-  if(scene.fog){
-    scene.fog.near = lerp(lerp(w.baseNear, MARS_WX.snow.fogNear, ks), MARS_WX.dust.fogNear, kd);
-    scene.fog.far  = lerp(lerp(w.baseFar,  MARS_WX.snow.fogFar,  ks), MARS_WX.dust.fogFar,  kd);
-    scene.fog.color.copy(w.baseFogCol).lerp(w.dustFogCol, kd*0.9);
+  /* 視程・日射・空の色。基準値へ必ず戻せるよう、毎フレーム基準から積み直す。
+     前フレームの値へ足し込むと、天候が抜けたあと元へ戻らない。 */
+  let near = w.baseNear, far = w.baseFar, sunMul = 1, dim = 0, rainVol = 0;
+  WX_FOG.copy(w.baseFogCol); WX_SKY.setRGB(1,1,1);
+  for(let i=0;i<w.list.length;i++){
+    const s = w.list[i], sp = s.sp; if(s.k < 0.004) continue;
+    near = lerp(near, sp.fogNear, s.k);
+    far  = lerp(far,  sp.fogFar,  s.k);
+    sunMul = lerp(sunMul, sp.sun, s.k);
+    if(sp.fogCol)  WX_FOG.lerp(s.fogCol, s.k*0.9);
+    if(sp.skyTint) WX_SKY.lerp(s.skyCol, s.k*0.9);
+    if(sp.rain) rainVol = Math.max(rainVol, sp.rain*s.k);
+    dim = Math.max(dim, s.k);
   }
-  if(w.sun) w.sun.intensity = w.baseSun * lerp(lerp(1, MARS_WX.snow.sun, ks), MARS_WX.dust.sun, kd);
-  if(w.sunSprite) w.sunSprite.material.opacity = 0.95 * lerp(1, 0.15, Math.max(kd, ks*0.5));
+  if(scene.fog){ scene.fog.near = near; scene.fog.far = far; scene.fog.color.copy(WX_FOG); }
+  if(w.sun) w.sun.intensity = w.baseSun * sunMul;
+  if(w.sunSprite) w.sunSprite.material.opacity = 0.95 * lerp(1, 0.15, dim);
   // 空メッシュは fog:false（フォグが効かない）。天候中は自分で色を掛けて濁らせる
-  if(w.sky){ w.sky.material.color.setRGB(1,1,1).lerp(w.skySnow, ks*0.85).lerp(w.skyDust, kd); }
+  if(w.sky) w.sky.material.color.copy(WX_SKY);
+  Audio2.rainSet(rainVol);
 }
 
 /* ── 構造物の当たり判定（2026-09-23 新設）────────────────────
@@ -3246,7 +3299,8 @@ function buildSurface(obj, isSat){
   MODE='surface'; CURSAT = !!isSat; G.obj = obj; G.cfg = cfg; G.grav = GRAV[obj.id] || 9;
   BGM.play('surface');
   G.jumpNoted = 0; G.rocks = []; G.geysers = []; G.weather = null; G.haze = null;
-  G.marsWx = null; G.olympus = null; G.skyMesh = null;
+  G.wx = null; G.olympus = null; G.skyMesh = null; G.lakes = [];
+  Audio2.rainOff();
   G.shake = G.shake || new THREE.Vector3(); G.shake.set(0,0,0);
   G.skyGaze = false; G.skyReturn = false;
 
@@ -3300,6 +3354,16 @@ function buildSurface(obj, isSat){
     scene.add(mons); G.olympus = mons;
   }
 
+  // メタンの湖（タイタン）。椀の底から depth*0.55 の高さに液面を張る
+  G.lakes = [];
+  if(LAKES[cfgName]) LAKES[cfgName].forEach(L=>{
+    const y = meshHeightAt(L[0],L[1]) + L[3]*0.55;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(L[2]*0.88, 44),
+      new THREE.MeshStandardMaterial({ color:0x0d241b, roughness:0.05, metalness:0.92 }));
+    disc.rotation.x = -Math.PI/2; disc.position.set(L[0], y, L[1]);
+    scene.add(disc); G.lakes.push({x:L[0], z:L[1], r:L[2], y:y, m:disc});
+  });
+
   // 発見目標＋構造物
   G.finds = [];
   const propRocks = [];                 // 構造物の殻。岩の間引きの後で台帳へ積む
@@ -3324,7 +3388,9 @@ function buildSurface(obj, isSat){
     scene.add(mk); G.finds.push(mk);
   });
   // 発見物と着陸船の周りからは岩を退ける（当たり判定が付いたので、塞ぐと記録できなくなる）
-  const clearZones = [[-13,7,8]].concat(G.finds.map(f=>[f.userData.ground.x, f.userData.ground.z, 6.5]));
+  const clearZones = [[-13,7,8]]
+    .concat(G.finds.map(f=>[f.userData.ground.x, f.userData.ground.z, 6.5]))
+    .concat(G.lakes.map(l=>[l.x, l.z, l.r*0.92]));        // 湖の中に岩を置かない
   G.rocks = G.rocks.filter(r=>{
     for(let i=0;i<clearZones.length;i++){
       const c=clearZones[i];
@@ -3359,16 +3425,17 @@ function buildSurface(obj, isSat){
   }
   // 温暖化した地球：熱の霞
   if(cfg.heat){ G.haze = makeHaze(); scene.add(G.haze); }
-  // 火星：ダストストームと雪
-  if(cfg.marsWx){
-    const mk = k=>{ const sp=MARS_WX[k], pt=makeMarsField(sp); pt.visible=false; scene.add(pt);
-                    return { sp, pt, on:false, k:0, t:0, gust:0, next:sp.first }; };
-    G.marsWx = { list:[mk('dust'), mk('snow')],
-                 baseNear:cfg.fogNear, baseFar:cfg.fogFar,
-                 baseFogCol:scene.fog ? scene.fog.color.clone() : new THREE.Color(cfg.sky[1]),
-                 dustFogCol:new THREE.Color(0x9a5530),
-                 sun:sl, baseSun:cfg.sun, sunSprite:G.sunSprite, sky:G.skyMesh,
-                 skyDust:new THREE.Color(0xb0704a), skySnow:new THREE.Color(0xc9ced6) };
+  // 天候（火星＝砂嵐/雪、タイタン＝メタンの霧雨）
+  if(WX[cfgName]){
+    G.wx = { list: WX[cfgName].map(k=>{
+               const sp = WX_KIND[k], pt = makeWxField(sp); pt.visible = false; scene.add(pt);
+               return { sp, pt, on:false, k:0, t:0, gust:0, next:sp.first,
+                        fogCol: sp.fogCol!=null ? new THREE.Color(sp.fogCol) : null,
+                        skyCol: sp.skyTint!=null ? new THREE.Color(sp.skyTint) : null };
+             }),
+             baseNear:cfg.fogNear, baseFar:cfg.fogFar,
+             baseFogCol: scene.fog ? scene.fog.color.clone() : new THREE.Color(cfg.sky[1]),
+             sun:sl, baseSun:cfg.sun, sunSprite:G.sunSprite, sky:G.skyMesh };
   }
 
   // 空に向けた撮影で埋まる記録
@@ -3586,7 +3653,7 @@ function updSurface(dt){
   const ground = meshHeightAt(cx,cz)+1.2;
   camera.position.lerp(new THREE.Vector3(cx, Math.max(cy,ground), cz), clamp(dt*7,0,1));
   // 環境演出（噴出・雷・地鳴り・熱霞）。揺れはカメラへ最後に足す
-  updGeysers(dt); updHaze(dt); updMarsWx(dt);
+  updGeysers(dt); updHaze(dt); updWeatherFx(dt);
   if(G.shake) G.shake.set(0,0,0);
   updWeather(dt);
   if(G.shake) camera.position.add(G.shake);
