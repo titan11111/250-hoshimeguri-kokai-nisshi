@@ -408,6 +408,36 @@
     #detail .go{margin-top:0; flex:1 1 auto; justify-content:flex-end; flex-wrap:nowrap}
     #detail .go .btn.primary{flex:1 1 160px; max-width:280px}
   }
+  /* ── iOS（縦持ち）の星図：星の選択と操作盤を最優先にする（2026-09-23 タイタン指示）。
+     10個のタイルを1画面に収めるため行を可変にし、解説は「名前＋決定ボタン」の1行に畳む。
+     画面の75%しか star chart に使えないので、削る順は 飾り→解説→タイルの余白。 */
+  @media (max-width:640px), (pointer:coarse){
+    #map.pad{padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px}
+    #map .eyebrow{display:none}
+    #map h2{font-size:17px; letter-spacing:.1em; margin:0}
+    #map .head{gap:6px; align-items:center}
+    #map .head-side{gap:8px}
+    #map .head-side .btn.ghost{min-height:36px; padding:4px 10px; font-size:11px}
+    #map #shipStatus{font-size:10.5px; line-height:1.35}
+    #map .prog{font-size:10px}
+    #map .prog b{font-size:14px}
+    .pick{
+      grid-template-columns:1fr 1fr; grid-auto-rows:minmax(44px,1fr);
+      gap:6px; margin:6px 0; padding:0;
+    }
+    .pick-item{min-height:44px; padding:6px 9px; gap:8px}
+    .pick-item .nm{font-size:13.5px}
+    .pick-item .dot{width:16px; height:16px}
+    #detail{flex-direction:row; align-items:center; gap:10px; padding:8px 10px}
+    #detail .kana, #detail .mission, #detail .meta{display:none}
+    #detail h3{font-size:16px; margin:0; white-space:nowrap}
+    #detail .go{margin-top:0; flex:1 1 auto; justify-content:flex-end; flex-wrap:nowrap; gap:6px}
+    #detail .go .btn.primary{
+      flex:1 1 auto; min-height:44px; font-size:13px; padding:8px 10px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    #detail .stamp{font-size:9px; padding:2px 5px}
+  }
   @media (max-width:640px){
     #hint{display:block;font-size:11px;bottom:6px}
     #action{bottom:40px}
@@ -594,17 +624,20 @@ const SURF = {
          amb:0.72, sun:1.45, rough:1.4, scale:0.012, craters:0, props:'gantry', star:0, heat:1 },
   crater:{ ground:[0x8f8a80,0xa9a39a], rock:0x6f6a63, sky:[0x000000,0x000000], fogNear:400, fogFar:900,
          amb:0.16, sun:1.9, rough:2.6, scale:0.016, craters:34, props:'flag', star:1 },
-  shade:{ ground:[0x8b7f72,0x6d6258], rock:0x5a5049, sky:[0x000000,0x000000], fogNear:380, fogFar:880,
-         amb:0.13, sun:2.5, rough:3.4, scale:0.018, craters:26, props:'base', star:1 },
+  /* 2026-09-23 水星：カラカラに干上がった地面（タイタン指示）。色を漂白して乾いた白茶へ寄せ、
+     干割れ（parch）の網目を頂点色と細部テクスチャの両方に入れる。 */
+  shade:{ ground:[0x8d8072,0xc2b49e], rock:0x6a5f52, sky:[0x000000,0x000000], fogNear:380, fogFar:880,
+         amb:0.17, sun:2.5, rough:3.4, scale:0.018, craters:26, props:'base', star:1,
+         parch:1, parchCol:0x6b5c4c, bump:0.62 },
   /* 2026-09-23 金星：谷（地溝）を刻み、雷と地鳴りを起こす */
   cloud:{ ground:[0xa4653a,0xba8050], rock:0x8c4f28, sky:[0x3d1207,0x8f3313], fogNear:50, fogFar:300,
-         amb:0.58, sun:0.8, rough:1.6, scale:0.011, craters:0, props:'platform', star:0, storm:1,
-         haze:{ color:0xe6d9a2, opacity:0.20, size:3.2, rise:0.7 } },   // 硫酸のもや
+         amb:0.58, sun:0.8, rough:1.6, scale:0.011, craters:0, props:'platform', star:0, storm:1 },
+         // 硫酸のもや（haze粒子）は 2026-09-23 に撤去。丸い点が地面から浮き上がり気泡に見えたため
   /* 2026-09-23 火星：地表を酸化鉄の赤茶へ寄せ、大気を薄青にした（タイタン指示）。
      sky[1] はフォグ色と半球光の上側色を兼ねるため、遠景ほど赤茶が薄青へ沈む。
      オリンポス山を地平線に置くので fogFar を 620→1150 に伸ばしてある。 */
-  rocky:{ ground:[0x5e1f08, 0x8b3312], rock:0x4a1c09, sky:[0x39627f,0xa4c6e0],
-         fogCol:0xb08a86, fogNear:340, fogFar:1250,
+  rocky:{ ground:[0x631404, 0x962a0c], rock:0x4c1204, sky:[0x1d5a94,0x93c8f0],
+         fogCol:0xa98b93, fogNear:340, fogFar:1250,
          amb:0.4, sun:1.5, rough:4.2, scale:0.013, craters:9, props:'ice', star:0.12,
          valles:1, olympus:1 },
   ice:{ ground:[0xcfe0ea,0xa9c4d6], rock:0x8fb0c4, sky:[0x000000,0x000000], fogNear:340, fogFar:820,
@@ -628,11 +661,17 @@ const SURF = {
   tiger:{ ground:[0xdcecf8, 0xf5fbff], rock:0xc6dded, sky:[0x000000,0x000000], fogNear:320, fogFar:840,
          amb:0.34, sun:1.2, rough:1.4, scale:0.017, craters:2, props:'shard', star:1,
          geyser:'water', gloss:0.32, metal:0.05, bump:0.18,
-         crack:'tiger', crackCol:0x3fb6e0, crackMix:0.92 },
+         crack:'tiger', crackCol:0x3fb6e0, crackMix:0.92,
+         /* 2026-09-23 タイタン指示「水蒸気のようなわずかな大気」。大気は無いに等しいので、
+            空は黒のまま、遠景だけ薄青くかすませ、ごく薄い水蒸気を低く立ちのぼらせる */
+         fogCol:0x1b3340, haze:{ color:0xcfe8f5, opacity:0.085, size:1.7, rise:0.45 } },
   /* 2026-09-23 エウロパ専用。ミランダ・トリトンの ice とは分け、平らな氷原＋リネアにする */
+  /* 2026-09-23 エウロパ：氷の地殻が常にひび割れている（タイタン指示）。
+     大きなリネア（crack:'linea'）と、全面の細かい氷の割れ（parch）を重ねる。 */
   icefield:{ ground:[0xdcefff,0x8fb4d4], rock:0xc3dbec, sky:[0x000000,0x000000], fogNear:300, fogFar:820,
          amb:0.30, sun:1.15, rough:1.5, scale:0.016, craters:3, props:'shard', star:1,
-         geyser:'water', gloss:0.42, metal:0.06, bump:0.22 }
+         geyser:'water', gloss:0.42, metal:0.06, bump:0.34,
+         crack:'linea', crackCol:0x9a5f42, crackMix:0.72, parch:1, parchCol:0x86a6bf }
 };
 
 /* finds: k=識別 n=名前 t=日誌本文 sky=空を見上げて撮る対象 */
@@ -1129,8 +1168,20 @@ const CRACKS = {
   tiger:[[0.16,-34,7,3.0],[0.16,-6,6,2.6],[0.16,22,7,2.8],[0.16,52,6,2.4]],
   // ガニメデ：サルカス（溝状地形）。向きの違う帯が互いを切る
   sulci:[[0.30,-96,14,4.2],[0.30,-40,12,3.6],[0.30,16,13,3.8],
-         [1.42,-70,10,3.0],[1.42,44,11,3.2],[-0.95,110,9,2.6]]
+         [1.42,-70,10,3.0],[1.42,44,11,3.2],[-0.95,110,9,2.6]],
+  /* エウロパ：氷の地殻を走るリネア。全球を覆う網目なので、向きの違う筋を交差させる
+     （2026-09-23 タイタン指示「常にひび割れている」）。[角度, 位置, 幅, 深さ] */
+  linea:[[0.15,-30,7,2.6],[0.15, 74,5,2.0],[1.15, 24,6,2.2],[1.15,-88,5,1.8],
+         [-1.05, 96,8,2.9],[-1.05,-16,6,2.2],[2.35,-120,5,2.0],[2.35, 40,4,1.6],
+         [0.62,-64,4,1.5],[-0.35,132,5,1.9],[1.85, 8,4,1.4],[-1.62,-140,4,1.6]]
 };
+/* 干上がった地面のひび割れ 0〜1（2026-09-23）。セルノイズを持っていないので、
+   向きの違う fbm の稜線（0.5 に近い帯）を2枚重ねて多角形の割れ目に見せる。 */
+function parchAt(x,z,s){
+  const a = Math.abs(fbm(x*0.055,      z*0.055,      s+91,  2) - 0.5);
+  const b = Math.abs(fbm(x*0.041 + 37, z*0.041 - 12, s+143, 2) - 0.5);
+  return clamp(Math.max(0, 1 - a/0.022)*0.8 + Math.max(0, 1 - b/0.018)*0.8, 0, 1);
+}
 /* その地点が溝の中にどれだけ入っているか 0〜1。riftCut と同じ蛇行式を使う */
 function crackAt(x,z){
   const list = TER && CRACKS[TER.cfg.crack]; if(!list) return 0;
@@ -1162,12 +1213,7 @@ function heightAt(x,z){
     h += riftCut(x,z,s,-0.80, -104,  9, 20);
   }
   if(TER.name==='icefield'){
-    // エウロパ：氷原なので起伏を抑え、代わりにリネア（浅く長い裂け目）を走らせる。
-    h *= 0.42;
-    h += riftCut(x,z,s, 0.15,  -30, 2.6,  7);
-    h += riftCut(x,z,s, 1.15,   24, 2.2,  6);
-    h += riftCut(x,z,s,-1.05,   96, 2.9,  8);
-    h += riftCut(x,z,s, 2.35, -120, 2.0,  5);
+    h *= 0.42;   // エウロパ：氷原なので起伏を抑える。リネアは CRACKS.linea が掘る（色と同じ表）
   }
   const lk = LAKES[TER.name];
   if(lk) for(let i=0;i<lk.length;i++){
@@ -1257,7 +1303,7 @@ function pushOutOfRocks(pl, limitY, pad){
     const t = r.cy + r.ry*Math.sqrt(Math.max(0, 1 - Math.min(1, d2/(r.rx*r.rx))));
     if(t <= limitY) continue;                        // 乗り越えられる高さは通す
     let d = Math.sqrt(d2);
-    if(d < 1e-4){ dx=1; dz=0; d=1e-4; }
+    if(d < 1e-4){ dx=1; dz=0; d=1; }                 // 完全に重なったときは +X へ逃がす（単位ベクトルにする）
     const nx=dx/d, nz=dz/d;
     pl.x = r.x + nx*rad; pl.z = r.z + nz*rad;        // 縁まで押し戻す
     const vn = pl.vx*nx + pl.vz*nz;
@@ -1454,13 +1500,17 @@ function planetMaps(kind, hex, seed, id){
     for(let i=0;i<NP;i++){ const v=hA[i]+dA[i]*0.4; if(v<mn)mn=v; if(v>mx)mx=v; }
     const inv = 1/Math.max(1e-6, mx-mn);
     const LUT = shadeLut(hex, 0.42, isIce?1.12:1.18, isIce?0.42:0.98, 72);
+    /* 裂け目の色。エウロパ・ガニメデの塩に汚れたリネアは赤茶だが、エンケラドスの
+       タイガーストライプは下の海が透けた水色（2026-09-23 タイタン指示）。 */
+    const LINEA = (id==='enceladus') ? [96,206,238] : [134,80,58];
     const bCv = mkCv(W,H), bCtx = bCv.getContext('2d'), bImg = bCtx.createImageData(W,H), BD = bImg.data;
     for(let i=0,p=0;i<NP;i++,p+=4){
       const hn = (hA[i]+dA[i]*0.4-mn)*inv;
       const q = lutAt(LUT, (isIce? 0.98+hn*0.12 : 0.94+hn*0.18) * aA[i]);
       let r=LUT.d[q], g2=LUT.d[q+1], b2=LUT.d[q+2];
       if(kA[i]===1){ const t=xA[i]; r=lerp(r,244,t); g2=lerp(g2,248,t); b2=lerp(b2,252,t); }
-      else if(kA[i]===2){ const t=xA[i]*0.86; r=lerp(r,134,t); g2=lerp(g2,80,t); b2=lerp(b2,58,t); }
+      else if(kA[i]===2){ const t=xA[i]*0.86;                 // リネア（氷殻の裂け目）
+        r=lerp(r,LINEA[0],t); g2=lerp(g2,LINEA[1],t); b2=lerp(b2,LINEA[2],t); }
       D[p]=r; D[p+1]=g2; D[p+2]=b2; D[p+3]=255;
       // 凹凸は細部だけを使う。大地形まで入れるとクレーターが階調に埋もれる
       const bv = clamp(0.5 + (dA[i]*2.2 + hA[i]*0.35), 0, 1)*255;
@@ -1566,11 +1616,15 @@ function planetMaps(kind, hex, seed, id){
          「地球がそのまま入る」大きさと濃さにし、縁へ寄り添う明るいメタンの巻雲を足す。 */
       /* 2026-09-23 再拡大。緯度 −0.38(−22°) は視野の下端に寄って周縁減光と混ざり、
          到着時に「暗い縁」としか見えなかった。−0.20(−11°) へ上げて円盤の中央に置く。 */
-      neptune:[ {la:-0.20,lo:1.70,rl:0.56,rt:0.20,c:[11,22,70],core:[4,8,38]},
-                {la:-0.40,lo:1.58,rl:0.24,rt:0.055,c:[238,246,253],a:0.88},   // 渦の南縁の巻雲
-                {la:-0.06,lo:1.98,rl:0.15,rt:0.042,c:[230,240,251],a:0.72},   // 北縁の筋
+      /* 2026-09-23 実寸へ。大暗斑は約 13,000×6,600 km、海王星の半径は 24,622 km なので
+         角半径は 6,500/24,622 = 0.264 rad ／ 3,300/24,622 = 0.134 rad。
+         見かけの大きさ＝惑星の直径の約26%。濃さと緯度（円盤中央に来る −0.20）は
+         「暗い縁にしか見えない」対策としてそのまま残す。 */
+      neptune:[ {la:-0.20,lo:1.70,rl:0.264,rt:0.134,c:[11,22,70],core:[4,8,38]},
+                {la:-0.31,lo:1.64,rl:0.12,rt:0.037,c:[238,246,253],a:0.88},   // 渦の南縁の巻雲
+                {la:-0.11,lo:1.84,rl:0.075,rt:0.030,c:[230,240,251],a:0.72},  // 北縁の筋
                 {la:-0.10,lo:2.45,rl:0.13,rt:0.055,c:[232,242,252],a:0.80},   // スクーター
-                {la:-0.98,lo:4.30,rl:0.17,rt:0.075,c:[24,42,102],core:[13,25,74]} ],  // 小暗斑 D2
+                {la:-0.98,lo:4.30,rl:0.080,rt:0.050,c:[24,42,102],core:[13,25,74]} ],  // 小暗斑 D2
       uranus: []
     })[id] || [];
     for(const o of ovals) stampOval(D,W,H,o,s0);
@@ -1846,7 +1900,7 @@ let CUR = null, CURSAT = false;   // 現在の天体 / 衛星側か
 let pendingShot = null;
 
 const K = {};
-const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5, tboost:0, steerX:0, steerY:0, dash:0 };
+const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5, tboost:0, steerX:0, steerY:0, dash:0, abtn:0 };
 const DASH_MUL = 3;               // ダッシュ時の速度倍率（人も探査車も3倍）
 const DASH_HOLD_MS = 200;         // これ以上押し続けたらダッシュ、それ未満は撮影
 function usePadHint(){
@@ -1959,6 +2013,17 @@ function setControllerLabels(a, b, select){
   if(selectBtn) selectBtn.setAttribute('aria-label',select);
 }
 
+/* Aボタンの実処理。開始・決定・加速・行動はすべてここを通す（入口を1つにする） */
+function pressA(){
+  if(!$('title').hidden){ startVoyage(); return; }     // タイトル＝出港
+  if(!$('map').hidden){ mapDecide(); return; }         // 星図＝決定（選んだ星へ出発）
+  if(PAUSED) return;
+  if(MODE==='cruise'){ IN.abtn = 1; return; }          // 巡航＝加速（押している間だけ）
+  if(MODE==='orbit' && G.landable) act('land');
+  else if(MODE==='surface' && !G.nearFind) IN.jump = true;
+  else act('record');
+}
+
 /* ── 入力 ─────────────────────────────────────── */
 function bindInput(){
   installFcIosTouchGuard();
@@ -2000,13 +2065,35 @@ function bindInput(){
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   };
-  tap('fc-btn-a', () => {
-    if(!$('title').hidden){ startVoyage(); return; }   // タイトルでは A＝出港
-    if(PAUSED) return;
-    if(MODE==='orbit' && G.landable) act('land');
-    else if(MODE==='surface' && !G.nearFind) IN.jump = true;
-    else act('record');
-  });
+  /* A: 画面ごとに役割が変わる。巡航の「加速」は押している間だけ効くので、
+     tap()（押下のみ）ではなく押下と解放の両方を見る（2026-09-23）。
+     入口は pressA() の1本。タップ・キーボード・コントローラが同じ関数を通る。 */
+  (function bindAButton(){
+    const el = $('fc-btn-a'); if(!el) return;
+    let pid = null, active = false;
+    const down = e => {
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      e.preventDefault();
+      pid = e.pointerId; active = true;
+      try{ el.setPointerCapture(e.pointerId); }catch(_){}
+      el.classList.add('pressed');
+      if(navigator.vibrate) navigator.vibrate(15);
+      unlockAudio();
+      pressA();
+    };
+    const end = e => {
+      if(!active) return;
+      if(e && pid != null && e.pointerId !== pid) return;
+      active = false; pid = null;
+      el.classList.remove('pressed');
+      IN.abtn = 0;                                   // 加速は離したら必ず切る
+    };
+    el.addEventListener('pointerdown', down, {passive:false});
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    regAct(el, pressA);
+  })();
   /* B: 短押し＝撮影、押しっぱなし＝ダッシュ（3倍速）。
      押した瞬間に撮る旧仕様だと長押しでも必ず1枚撮れてしまうため、
      離した時点で「長押しではなかった」ものだけ撮る（2026-09-23）。 */
@@ -2041,7 +2128,10 @@ function bindInput(){
       if(timer){ clearTimeout(timer); timer = null; }
       el.classList.remove('pressed'); el.classList.remove('dashing');
       IN.dash = 0;
-      if(!dashing && !PAUSED) act('shoot');       // 長押しにならなかった＝撮影
+      if(!dashing && !PAUSED){
+        if(!$('map').hidden || !$('log').hidden) toggleLog();   // 星図では B＝日誌
+        else act('shoot');                                      // 長押しにならなかった＝撮影
+      }
       dashing = false;
     };
     el.addEventListener('pointerdown', down, {passive:false});
@@ -2051,6 +2141,7 @@ function bindInput(){
     regAct(el, ()=>{ if(!PAUSED) act('shoot'); });   // キー割り当てからは従来どおり撮影
   })();
   tap('fc-btn-select', () => {
+    if(!$('map').hidden){ if(!$('log').hidden) toggleLog(); return; }   // 星図では戻る＝日誌を閉じる
     if(PAUSED) return;
     if(MODE==='surface'){
       toast('帰還', '着陸船へ帰還', '周回軌道へ戻った', true);
@@ -2070,6 +2161,7 @@ function bindInput(){
     if(k==='p') act('shoot');
     if(k==='q') act('skygaze');
     if(k==='x') IN.dash = 1;                      // Bボタンと同じ。押している間ダッシュ
+    if(k==='z' && MODE==='cruise' && $('map').hidden) IN.abtn = 1;   // Aボタンと同じ。押している間加速
     if(k==='l') act('land');
     if(k==='c') G.rear = !G.rear;
     if(k==='f') { if(MODE==='cruise'){ G.auto=!G.auto; toast('操縦',G.auto?'自動操縦 入':'自動操縦 切','',true);} }
@@ -2085,9 +2177,10 @@ function bindInput(){
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(k)>=0) e.preventDefault();
   };
   const up = e => { const k = e.key.length===1?e.key.toLowerCase():e.key; K[k]=false;
-    if(k==='x') IN.dash = 0; };
+    if(k==='x') IN.dash = 0;
+    if(k==='z') IN.abtn = 0; };
   window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-  window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; IN.dash=0; });
+  window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; IN.dash=0; IN.abtn=0; });
   document.addEventListener('pointerdown', unlockAudio, { once:true });
   document.addEventListener('visibilitychange', ()=>{
     if(document.hidden){ BGM.suspend(); if(MODE!=='attract' && MODE!=='boot') setPaused(true); }
@@ -2149,7 +2242,7 @@ function readInput(){
   IN.side = clamp((k.d||k.ArrowRight?1:0) - (k.a||k.ArrowLeft?1:0), -1, 1);
   IN.rot  = (k.ArrowRight?1:0) - (k.ArrowLeft?1:0);
   IN.turn = clamp(IN.side + IN.rot, -1, 1);
-  IN.boost = (k.Shift||IN.tboost)?1:0;
+  IN.boost = (k.Shift||IN.tboost||IN.abtn)?1:0;   // Aボタン長押しでも加速（2026-09-23）
   if(k[' ']) IN.jump = true;
   if(MODE==='surface' && IN.rot){
     IN.look.x -= IN.rot*0.045;
@@ -2163,6 +2256,7 @@ let TICKERR = 0;
 function tick(){
   const dt = Math.min(clock.getDelta(), 0.05);
   try{
+  stepMapCursor(dt);            // 星図は十字キーで選ぶ（ポーズ中でも動かせる）
   if(!PAUSED){
     T += dt;
     readInput();
@@ -2378,25 +2472,9 @@ function spinRate(id){
   return (r[0] < 0 ? -1 : 1) * TAU / p;                 // rad/秒
 }
 function axialTilt(id){ return ROT[id] ? ROT[id][1]*Math.PI/180 : 0; }
-/* 自転軸と赤道を見せる（2026-09-23 タイタン指示「地軸の傾きを表現して」）。
-   惑星グループの子として足すので、軸の傾きはグループから自動で継承される。
-   軸は極から極へ抜ける細い棒、赤道は輪。天王星なら棒が横倒しに見える。 */
-function addAxisGuide(grp, radius){
-  const col = 0x7fe3ff;
-  const mat = new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.42,
-    depthWrite:false, fog:false });
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(radius*0.008, radius*0.008, radius*2.72, 6), mat);
-  grp.add(rod);
-  for(const sy of [1,-1]){                       // 極の印。北だけ円錐を上向きに
-    const c = new THREE.Mesh(new THREE.ConeGeometry(radius*0.045, radius*0.12, 8), mat);
-    c.position.y = sy*radius*1.36; if(sy<0) c.rotation.x = Math.PI;
-    grp.add(c);
-  }
-  const eq = new THREE.Mesh(new THREE.TorusGeometry(radius*1.035, radius*0.006, 4, 72),
-    new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.30,
-      depthWrite:false, fog:false }));
-  eq.rotation.x = Math.PI/2; grp.add(eq);
-}
+/* 自転軸ガイド（棒・極の印・赤道の輪）は 2026-09-23 に撤去した。
+   傾きは grp.rotation.z を軸にした自転そのもので見せる（線は引かない・タイタン指示）。
+   数字は星図の「自転 ○時間 ／ 軸の傾き ○°」で読める。 */
 
 /* 自転を1歩進める。グループに軸の傾きを持たせ、球だけをそのローカルYで回す。
    グループ側を回すと傾きと自転が混ざるので、回してよいのは球（userData.globe）だけ。 */
@@ -2609,40 +2687,90 @@ function makeAnimal(kind){
   return g;
 }
 /* 地球の干上がった地表にいる5種。数・速さ・飛ぶかを種ごとに変える */
-const EARTH_LIFE = [ ['camel',3,1.7,0], ['dog',4,2.6,0], ['lizard',6,1.1,0],
-                     ['crow',5,7.0,1], ['scorpion',5,0.7,0] ];
+/* [種, 数, 速さ, 飛ぶか, 当たり判定の半径]。半径は見た目の胴の幅に合わせてある */
+const EARTH_LIFE = [ ['camel',3,1.7,0,1.15], ['dog',4,2.6,0,0.55], ['lizard',6,1.1,0,0.45],
+                     ['crow',5,7.0,1,0.40], ['scorpion',5,0.7,0,0.35] ];
 function spawnAnimals(list){
   G.animals = [];
   list.forEach(e=>{
-    const kind=e[0], count=e[1], spd=e[2], fly=e[3];
+    const kind=e[0], count=e[1], spd=e[2], fly=e[3], rad=e[4]||0.5;
     for(let i=0;i<count;i++){
       const g = makeAnimal(kind);
       const a = Math.random()*TAU, d = 22 + Math.random()*150;
       scene.add(g);
-      G.animals.push({ g, spd, fly, x:Math.cos(a)*d, z:Math.sin(a)*d,
-                       face:Math.random()*TAU, t:Math.random()*4, turn:0,
+      const f = Math.random()*TAU;
+      G.animals.push({ g, kind, spd, fly, rad, x:Math.cos(a)*d, z:Math.sin(a)*d,
+                       face:f, tgt:f, v:0, state: fly?'walk':'rest',
+                       t:Math.random()*4, gait:Math.random()*TAU,
                        alt: fly ? 12+Math.random()*14 : 0, ph:Math.random()*TAU });
     }
   });
 }
+/* 生き物の更新（2026-09-23 作り直し）。直した3点：
+   ① 向き ── モデルは +X が前。rotation.y は -face（旧 -face+π/2 は90°ずれて横歩きだった）
+   ② 歩き方 ── 目標方位へ滑らかに寄せ、速度も補間する。立ち止まる「休み」を入れ、
+      脚の振りは実速度から出す（止まっているのに脚が動く状態をなくす）
+   ③ 逃げる ── 近づかれたら逆方向へ向きを変えて速足になる */
 function updAnimals(dt){
   const list = G.animals; if(!list || !list.length) return;
+  const px = G.pl ? G.pl.x : 0, pz = G.pl ? G.pl.z : 0;
   for(let i=0;i<list.length;i++){
     const o = list[i];
+    const dx = o.x-px, dz = o.z-pz, dist = Math.hypot(dx,dz);
+    const scare = o.fly ? 26 : 16;
+    const flee = dist < scare;
+
     o.t -= dt;
-    if(o.t <= 0){ o.t = 2.0 + Math.random()*5; o.turn = (Math.random()-0.5)*1.8; }
-    o.face += o.turn*dt;
-    o.x += Math.cos(o.face)*o.spd*dt; o.z += Math.sin(o.face)*o.spd*dt;
-    if(Math.hypot(o.x,o.z) > 195){ o.face += Math.PI; o.turn = 0; }   // 未踏査域へ出さない
+    if(flee){ o.tgt = Math.atan2(dz, dx); o.state = 'walk'; }   // 背を向けて離れる
+    else if(o.t <= 0){
+      if(o.fly || o.state === 'rest'){ o.state = 'walk'; o.t = 2.5 + Math.random()*5; }
+      else { o.state = 'rest'; o.t = 1.4 + Math.random()*3.6; }
+      o.tgt = o.face + (Math.random()-0.5)*(o.fly ? 1.5 : 2.4);
+    }
+    if(Math.hypot(o.x,o.z) > 190){ o.tgt = Math.atan2(-o.z,-o.x); o.state='walk'; }  // 未踏査域へ出さない
+
+    const diff = ((o.tgt - o.face + Math.PI*3) % TAU) - Math.PI;   // −π〜+π に畳む
+    const rate = (o.fly ? 1.5 : 2.4) * (flee ? 1.8 : 1);
+    o.face += clamp(diff, -rate*dt, rate*dt);
+
+    const want = (o.state === 'rest' && !flee) ? 0 : o.spd * (flee ? 1.8 : 1);
+    o.v = lerp(o.v, want, clamp(dt*(flee ? 4 : 1.8), 0, 1));
+    o.x += Math.cos(o.face)*o.v*dt; o.z += Math.sin(o.face)*o.v*dt;
+
     const gy = meshHeightAt(o.x, o.z);
-    o.g.position.set(o.x, gy + (o.fly ? o.alt + Math.sin(T*0.9 + o.ph)*1.6 : 0), o.z);
-    o.g.rotation.y = -o.face + Math.PI/2;
+    const bob = (!o.fly && o.v > 0.05) ? Math.abs(Math.sin(o.gait))*0.06 : 0;
+    o.g.position.set(o.x, gy + (o.fly ? o.alt + Math.sin(T*0.9 + o.ph)*1.6 : bob), o.z);
+    o.g.rotation.y = -o.face;                       // モデルの前は +X
+    if(o.fly) o.g.rotation.z = clamp(-diff*0.7, -0.5, 0.5);   // 旋回に合わせて傾ける
+
+    o.gait += (o.fly ? dt*11 : o.v*dt*2.6);
     const ls = o.g.userData.legs;
     if(ls) for(let j=0;j<ls.length;j++){
-      if(o.g.userData.wing) ls[j].rotation.x = Math.sin(T*11 + o.ph)*0.85*(j?-1:1);
-      else ls[j].rotation.x = Math.sin(T*(o.spd*2.6) + o.ph + j*Math.PI/2)*0.45;
+      if(o.g.userData.wing) ls[j].rotation.x = Math.sin(o.gait + o.ph)*0.85*(j?-1:1);
+      else ls[j].rotation.x = Math.sin(o.gait*2 + o.ph + j*Math.PI/2)*0.45*clamp(o.v/Math.max(o.spd,0.1),0,1);
     }
   }
+}
+/* 生き物は通り抜けない。動くので台帳(G.rocks)ではなく毎フレーム直接押し返す。
+   飛んでいる個体は頭上を通るので対象外（2026-09-23 タイタン指示「動物は当たり判定あり」）。 */
+function pushOutOfAnimals(pl, pad){
+  const list = G.animals; if(!list || !list.length) return false;
+  let hit = false;
+  for(let i=0;i<list.length;i++){
+    const o = list[i]; if(o.fly) continue;
+    const rad = o.rad + pad;
+    let dx = pl.x-o.x, dz = pl.z-o.z; const d2 = dx*dx+dz*dz;
+    if(d2 >= rad*rad) continue;
+    let d = Math.sqrt(d2);
+    if(d < 1e-4){ dx=1; dz=0; d=1; }                 // 完全に重なったときは +X へ逃がす
+    const nx=dx/d, nz=dz/d;
+    pl.x = o.x + nx*rad; pl.z = o.z + nz*rad;
+    const vn = pl.vx*nx + pl.vz*nz;
+    if(vn < 0){ pl.vx -= vn*nx; pl.vz -= vn*nz; }
+    o.tgt = Math.atan2(-nz, -nx); o.state = 'walk';   // ぶつかられた側は逃げ出す
+    hit = true;
+  }
+  return hit;
 }
 
 /* ── 打ち上げ ───────────────────────────────── */
@@ -2901,10 +3029,10 @@ function updCruise(dt){
     l3:'速度', v3:Math.round(G.speed*640).toLocaleString()+' km/h',
     bar:prog*100 });
   setHint((usePadHint()
-    ? '<b>十字</b> 機首/旋回 ・ 画面をなぞって旋回 ・ <b>B</b> 撮影 ・ <b>SELECT</b> 星図'
+    ? '<b>十字</b> 機首/旋回 ・ <b>A</b> 加速 ・ <b>B</b> 撮影 ・ <b>SELECT</b> 星図'
     : '<b>W/S</b> 機首 ・ <b>A/D</b> 旋回 ・ <b>SHIFT</b> 加速 ・ <b>SPACE</b> 減速 ・ <b>C</b> 後方視界 ・ <b>F</b> 自動操縦')
     + (off>18 ? ' ── <b style="color:var(--ember)">針路ずれ '+off.toFixed(0)+'°</b>' : ''));
-  setControllerLabels('航行', '撮影', '星図');
+  setControllerLabels('加速', '撮影', '星図');
   if(off>22 && !G.warned){ G.warned=1; setTimeout(()=>G.warned=0, 6000); }
   if(dist < b.rad*3.1) enterOrbit(b);
 }
@@ -2946,7 +3074,6 @@ function enterOrbit(b){
   const sunDir = new THREE.Vector3(-1,0.32,-0.55).normalize().multiplyScalar(b.rad*46);
   addSun(sunDir, b.id==='sun'?0.85:1.15, b.id==='sun'?0:b.rad*10, 0xfff0cf);
   G.planet = makePlanet(b, b.rad); scene.add(G.planet);
-  if(b.id !== 'sun') addAxisGuide(G.planet, b.rad);   // 自転軸と赤道（太陽は輪郭が曖昧なので出さない）
   // 衛星
   /* 衛星。軌道半径 orbitR と大きさ size は「実際の順序を保ったまま」画面用に詰めた値。
      実比のままだとカリストは木星半径の26倍で、周回できる範囲(R*9)の外へ出る。 */
@@ -3307,9 +3434,11 @@ function gradientSky(top, bottom){
   return m;
 }
 const CRACK_COLOR = new THREE.Color();
+const PARCH_COLOR = new THREE.Color();
 function buildTerrain(cfg){
   const S=480, N=144;
   if(cfg.crackCol) CRACK_COLOR.setHex(cfg.crackCol);
+  if(cfg.parch) PARCH_COLOR.setHex(cfg.parchCol!=null ? cfg.parchCol : 0x4a4038);
   TERMESH = null;                       // 前の星のグリッドを接地に使わない
   const geo = new THREE.PlaneGeometry(S,S,N,N);
   geo.rotateX(-Math.PI/2);
@@ -3327,6 +3456,8 @@ function buildTerrain(cfg){
     c.copy(cA).lerp(cB, t);
     // 亀裂の底を別色で塗る（エンケラドスの水色のタイガーストライプ／ガニメデの明るいサルカス）
     if(cfg.crackCol){ const cr = crackAt(x,z); if(cr > 0) c.lerp(CRACK_COLOR, cr*cfg.crackMix); }
+    // 干割れ：割れ目の底を暗く落とす（水星）
+    if(cfg.parch){ const pr = parchAt(x,z,TER.seed); if(pr > 0) c.lerp(PARCH_COLOR, pr*0.38); }
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
@@ -3340,18 +3471,60 @@ function buildTerrain(cfg){
 }
 const SURFACE_TEX = {};
 function surfaceDetailTexture(cfg){
-  const key = cfg.ground[0]+'-'+cfg.ground[1];
+  const key = cfg.ground[0]+'-'+cfg.ground[1]+(cfg.parch?'-parch':'');
   if(SURFACE_TEX[key]) return SURFACE_TEX[key];
   const cv=mkCv(192,192), cx=cv.getContext('2d'), im=cx.createImageData(192,192);
   for(let y=0;y<192;y++) for(let x=0;x<192;x++){
     const fine=fbm(x*0.075,y*0.075,(cfg.rough*19)|0,4);
     const pits=Math.pow(Math.abs(fine-0.5)*2,2);
-    const v=clamp(Math.round(150+fine*68-pits*24),80,226), i=(y*192+x)*4;
+    let v=Math.round(150+fine*68-pits*24);
+    if(cfg.parch){                     // 近くで見たときの細かい干割れ
+      const c1=Math.abs(fbm(x*0.030,      y*0.030,      7,  3)-0.5);
+      const c2=Math.abs(fbm(x*0.022 + 11, y*0.022 + 23, 29, 3)-0.5);
+      v -= (Math.max(0,1-c1/0.013) + Math.max(0,1-c2/0.011))*30;
+    }
+    v=clamp(v,60,226);
+    const i=(y*192+x)*4;
     im.data[i]=im.data[i+1]=im.data[i+2]=v; im.data[i+3]=255;
   }
   cx.putImageData(im,0,0);
   const tx=new THREE.CanvasTexture(cv); tx.wrapS=tx.wrapT=THREE.RepeatWrapping; tx.repeat.set(22,22);
   tx.anisotropy=2; SURFACE_TEX[key]=tx; return tx;
+}
+/* ── メタンの湖をそれらしく見せる3点（2026-09-23 タイタン指示）──────────
+   ① 空を映す ── metalness 0.95 のまま envMap が無かったので真っ黒な穴に見えていた。
+      空グラデーションのテクスチャをそのまま環境マップに使い、水平線の明るさを映す
+   ② さざ波 ── 周期が揃う正弦波だけで法線マップを作る（継ぎ目が出ない）。毎フレーム
+      offset をずらして流す。実際のタイタンの湖は波高数mmなので、面は平らなまま
+   ③ 岸 ── 円盤の縁が地形を突き抜けて黒い多角形に見えていた。alphaMap で外周を
+      透かし、汀が砂へ溶けるようにする */
+let RIPPLE_TEX = null, LAKE_ALPHA_TEX = null;
+function rippleNormalTexture(){
+  if(RIPPLE_TEX) return RIPPLE_TEX;
+  const N=128, cv=mkCv(N,N), cx=cv.getContext('2d'), im=cx.createImageData(N,N);
+  const K = TAU/N;
+  const h=(x,y)=> Math.sin(x*K*3)*0.55 + Math.sin((x*0.6+y*0.8)*K*5)*0.34
+                + Math.sin(y*K*2 + 1.1)*0.42 + Math.sin((x*0.9-y*0.45)*K*8)*0.16;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const dx=h(x+1,y)-h(x-1,y), dy=h(x,y+1)-h(x,y-1);
+    const nx=-dx*1.7, ny=-dy*1.7, nz=1, l=Math.hypot(nx,ny,nz), i=(y*N+x)*4;
+    im.data[i]  =Math.round((nx/l*0.5+0.5)*255);
+    im.data[i+1]=Math.round((ny/l*0.5+0.5)*255);
+    im.data[i+2]=Math.round((nz/l*0.5+0.5)*255);
+    im.data[i+3]=255;
+  }
+  cx.putImageData(im,0,0);
+  const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  RIPPLE_TEX=t; return t;
+}
+function lakeAlphaTexture(){
+  if(LAKE_ALPHA_TEX) return LAKE_ALPHA_TEX;
+  const N=128, cv=mkCv(N,N), cx=cv.getContext('2d');
+  const g=cx.createRadialGradient(N/2,N/2,N*0.16, N/2,N/2,N*0.5);
+  g.addColorStop(0,'#fff'); g.addColorStop(0.90,'#fff'); g.addColorStop(0.985,'#8a8a8a'); g.addColorStop(1,'#000');
+  cx.fillStyle='#000'; cx.fillRect(0,0,N,N);
+  cx.fillStyle=g; cx.fillRect(0,0,N,N);
+  LAKE_ALPHA_TEX=new THREE.CanvasTexture(cv); return LAKE_ALPHA_TEX;
 }
 function rockMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.95, flatShading:true}); }
 function metalMat(hex){ return new THREE.MeshStandardMaterial({color:hex, roughness:0.42, metalness:0.72, flatShading:true}); }
@@ -3544,14 +3717,14 @@ function writePath(arr, n, pts){
   }
   return n;
 }
+/* 稲妻は一瞬で全部出さない。雲底から地表へ「走り抜ける」0.13秒を見せてから、
+   枝とスパークを足し、着地の瞬間に閃光・揺れ・雷鳴を出す（2026-09-23 タイタン指示）。 */
+const BOLT_GROW_SEC = 0.13;
 function strikeBolt(){
   const w = G.weather; if(!w || !w.bolt) return;
   const a = Math.random()*TAU, d = 90 + Math.random()*200;
   const bx = Math.cos(a)*d, bz = Math.sin(a)*d;
   const top = 230 + Math.random()*110, base = meshHeightAt(bx,bz);
-  const arr = w.bolt.geometry.attributes.position.array;
-  let n = 0;
-
   // 主放電：雲底から地表へ。節ごとに折れる
   const main = [];
   const STEP = 13;
@@ -3561,9 +3734,9 @@ function strikeBolt(){
                 lerp(top, base, t),
                 bz + (i===0||i===STEP? 0 : (Math.random()-0.5)*30) ]);
   }
-  n = writePath(arr, n, main);
 
   // 枝放電：主放電の途中から分かれて途切れる
+  const branchList = [];
   const branches = 2 + (Math.random()*3|0);
   for(let b=0;b<branches;b++){
     const from = 2 + (Math.random()*(STEP-4)|0);
@@ -3576,10 +3749,11 @@ function strikeBolt(){
                  Math.max(base, last[1] - (14+Math.random()*30)),
                  last[2] + Math.sin(dirA)*(10+Math.random()*22) + (Math.random()-0.5)*14 ]);
     }
-    n = writePath(arr, n, pts);
+    branchList.push(pts);
   }
 
   // 空を走るスパーク：雲底を横に這う放電。厚い雲の下から見上げた景色をつくる
+  const sparkList = [];
   const sparks = 2 + (Math.random()*2|0);
   for(let sIdx=0; sIdx<sparks; sIdx++){
     const y0 = top*(0.78 + Math.random()*0.25);
@@ -3591,27 +3765,52 @@ function strikeBolt(){
       pz += Math.sin(run)*(28+Math.random()*46) + (Math.random()-0.5)*40;
       pts.push([px, y0 + (Math.random()-0.5)*34, pz]);
     }
-    n = writePath(arr, n, pts);
+    sparkList.push(pts);
   }
 
+  w.path = { main, branches:branchList, sparks:sparkList, bx, bz, top, base, d };
+  w.grow = 0;                                    // 0→1 で雲底から地表まで伸びる
+  w.bolt.material.opacity = 0.95;
+  drawBolt();
+}
+/* いま伸びているぶんだけ線分バッファへ書き出す。着地までは主放電1本だけ */
+function drawBolt(){
+  const w = G.weather; if(!w || !w.bolt || !w.path) return;
+  const arr = w.bolt.geometry.attributes.position.array, P = w.path;
+  const tip = Math.max(2, Math.ceil(P.main.length * clamp(w.grow, 0, 1)));
+  let n = writePath(arr, 0, P.main.slice(0, tip));
+  if(w.grow >= 1){
+    P.branches.forEach(b => { n = writePath(arr, n, b); });
+    P.sparks.forEach(sp => { n = writePath(arr, n, sp); });
+  }
   w.bolt.geometry.setDrawRange(0, n/3);
   w.bolt.geometry.attributes.position.needsUpdate = true;
+}
+/* 着地の瞬間。閃光・揺れ・点光源・雷鳴はここで初めて出す */
+function boltImpact(){
+  const w = G.weather, P = w && w.path; if(!P) return;
   w.bolt.material.opacity = 1;
   w.flash = 1;
-  w.quake = clamp(1 - d/340, 0.25, 1);           // 揺れは落雷の瞬間だけ
-  if(w.light){ w.light.position.set(bx, top*0.5, bz); w.light.intensity = 5.5; }
+  w.quake = clamp(1 - P.d/340, 0.25, 1);         // 揺れは落雷の瞬間だけ
+  if(w.light){ w.light.position.set(P.bx, P.top*0.5, P.bz); w.light.intensity = 5.5; }
   // 音は光より遅れて届く。近いほど「ドーン」が立ち、遠いほど「ゴロゴロ」だけ残る
-  setTimeout(()=>{ Audio2.thunder(clamp(d/340, 0, 1)); }, 220 + d*3.2);
+  setTimeout(()=>{ Audio2.thunder(clamp(P.d/340, 0, 1)); }, 220 + P.d*3.2);
 }
 function updWeather(dt){
   const w = G.weather; if(!w) return;
   w.next -= dt;
   // 頻度は 1/3（旧 3.2〜10.7 秒 → 9.6〜32.2 秒）
   if(w.next <= 0){ strikeBolt(); w.next = 9.6 + Math.random()*22.5; }
-  if(w.bolt){
-    // 落雷後 0.45 秒ほど残し、途中で1度またたかせる（実測: 減衰 dt*7 では 0.14 秒で消えていた）
-    w.bolt.material.opacity = Math.max(0, w.bolt.material.opacity - dt*2.2);
-    if(w.bolt.material.opacity > 0.1 && Math.random() < 0.10) w.bolt.material.opacity = 1;
+  if(w.bolt && w.path){
+    if(w.grow < 1){                              // 雲底→地表を走り抜ける 0.13 秒
+      w.grow += dt / BOLT_GROW_SEC;
+      if(w.grow >= 1){ w.grow = 1; boltImpact(); }
+      drawBolt();
+    } else {
+      // 落雷後 0.45 秒ほど残し、途中で1度またたかせる（実測: 減衰 dt*7 では 0.14 秒で消えていた）
+      w.bolt.material.opacity = Math.max(0, w.bolt.material.opacity - dt*2.2);
+      if(w.bolt.material.opacity > 0.1 && Math.random() < 0.10) w.bolt.material.opacity = 1;
+    }
   }
   if(w.light) w.light.intensity = Math.max(0, w.light.intensity - dt*9);
   w.flash = Math.max(0, w.flash - dt*2.6);
@@ -3640,6 +3839,16 @@ function makeHaze(hz){
     blending:THREE.AdditiveBlending }));
   pt.frustumCulled = false; pt.userData = { st };
   return pt;
+}
+/* さざ波を流す。面は平らなまま法線マップの offset だけ動かす（軽い） */
+function updLakes(dt){
+  const ls = G.lakes; if(!ls || !ls.length) return;
+  for(let i=0;i<ls.length;i++){
+    const n = ls[i].m.material.normalMap; if(!n) continue;
+    n.offset.x = (n.offset.x + dt*0.010) % 1;
+    n.offset.y = (n.offset.y + dt*0.0065) % 1;
+    ls[i].m.material.normalScale.setScalar(0.22 + Math.sin(T*0.45 + ls[i].ph)*0.05);
+  }
 }
 function updHaze(dt){
   const h = G.haze; if(!h) return;
@@ -3827,7 +4036,10 @@ function addSkyBody(kind){
   if(!kind) return null;
   const spec = {
     earth:{id:'earth', r:62, dist:760, tex:'earth', c:0x2f6fb5, h:0.42},
-    jupiter:{id:'jupiter', r:170, dist:900, tex:'band', c:0xd8b48a, h:0.34},
+    /* 2026-09-23 タイタン指示「木星の距離は3倍くらい近い表示で良い」。
+       距離を縮めると地形（半径240）や岩に食い込むため、見かけの大きさだけ3倍にした
+       （2*atan(r/dist)：21° → 58°）。衛星4つ（イオ・エウロパ・ガニメデ・カリスト）共通。 */
+    jupiter:{id:'jupiter', r:500, dist:900, tex:'band', c:0xd8b48a, h:0.34},
     saturn:{id:'saturn', r:120, dist:900, tex:'band', c:0xe2cd9b, h:0.4, rings:true},
     uranus:{id:'uranus', r:90, dist:900, tex:'band', c:0x9fd8dc, h:0.45, rings:true},
     neptune:{id:'neptune', r:82, dist:900, tex:'band', c:0x3f62c8, h:0.45},
@@ -3851,7 +4063,7 @@ function buildSurface(obj, isSat){
   const airless = cfg.star >= 0.9;
   // fogCol があれば「空の色」と「霞の色」を分ける（火星＝青い空／赤い砂の霞）
   newScene(airless? null : (cfg.fogCol!=null ? cfg.fogCol : cfg.sky[1]), cfg.fogNear, cfg.fogFar);
-  if(airless) scene.fog = new THREE.Fog(0x05070e, cfg.fogNear, cfg.fogFar);
+  if(airless) scene.fog = new THREE.Fog(cfg.fogCol!=null ? cfg.fogCol : 0x05070e, cfg.fogNear, cfg.fogFar);
   setCam(0.5, 4200);
   MODE='surface'; CURSAT = !!isSat; G.obj = obj; G.cfg = cfg; G.grav = GRAV[obj.id] || 9;
   BGM.play('surface');
@@ -3912,13 +4124,29 @@ function buildSurface(obj, isSat){
 
   // メタンの湖（タイタン）。椀の底から depth*0.55 の高さに液面を張る
   G.lakes = [];
-  if(LAKES[cfgName]) LAKES[cfgName].forEach(L=>{
-    const y = meshHeightAt(L[0],L[1]) + L[3]*0.55;
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(L[2]*0.88, 44),
-      new THREE.MeshStandardMaterial({ color:0x0d241b, roughness:0.05, metalness:0.92 }));
-    disc.rotation.x = -Math.PI/2; disc.position.set(L[0], y, L[1]);
-    scene.add(disc); G.lakes.push({x:L[0], z:L[1], r:L[2], y:y, m:disc});
-  });
+  if(LAKES[cfgName]){
+    // 空グラデーションを環境マップに流用する（湖が空を映す。無いと真っ黒な穴になる）
+    let env = null;
+    if(G.skyMesh && G.skyMesh.material.map){
+      env = G.skyMesh.material.map.clone();
+      env.mapping = THREE.EquirectangularReflectionMapping; env.needsUpdate = true;
+    }
+    const ripple = rippleNormalTexture();
+    LAKES[cfgName].forEach(L=>{
+      const y = meshHeightAt(L[0],L[1]) + L[3]*0.55;
+      const size = L[2]*1.92;
+      const mat = new THREE.MeshStandardMaterial({
+        color:0x0a1712, roughness:0.10, metalness:0.18,
+        envMap:env, envMapIntensity:0.30,
+        normalMap:ripple, normalScale:new THREE.Vector2(0.26,0.26),
+        alphaMap:lakeAlphaTexture(), transparent:true, depthWrite:false
+      });
+      mat.normalMap.repeat.set(Math.max(3, L[2]/9), Math.max(3, L[2]/9));
+      const disc = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
+      disc.rotation.x = -Math.PI/2; disc.position.set(L[0], y, L[1]); disc.renderOrder = 2;
+      scene.add(disc); G.lakes.push({x:L[0], z:L[1], r:L[2], y:y, m:disc, ph:Math.random()*TAU});
+    });
+  }
 
   // 発見目標＋構造物
   G.finds = [];
@@ -4014,12 +4242,13 @@ function buildSurface(obj, isSat){
 
   // 主人公
   G.rover = !!obj.rover && !isSat;
-  G.player = buildWalker(G.rover);
+  G.player = buildWalker(G.rover, cfgName==='port');   // 地球は空気があるので宇宙服なし
   G.pl = { x:0, z:0, y:meshHeightAt(0,0), vy:0, vx:0, vz:0, ground:true, face:0 };
   G.player.position.set(0, G.pl.y, 0); scene.add(G.player);
-  const shadowMat = new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.28,depthWrite:false});
-  G.contactShadow = new THREE.Mesh(new THREE.CircleGeometry(G.rover?2.35:0.72,24),shadowMat);
-  G.contactShadow.rotation.x=-Math.PI/2; G.contactShadow.position.set(0,G.pl.y+0.035,0); scene.add(G.contactShadow);
+  /* 接地影は 2026-09-23 に撤去。輪郭の硬い円盤が地面に半分めり込み、
+     足元に灰色の半円が貼りついて見えたため（タイタン指示）。
+     更新側は if(G.contactShadow) で守られているので null のままでよい。 */
+  G.contactShadow = null;
   // 着陸船
   G.lander = buildShip(); G.lander.scale.setScalar(1.35);
   G.lander.position.set(-13, meshHeightAt(-13,7)+1.6, 7); G.lander.rotation.y = 0.9;
@@ -4031,7 +4260,7 @@ function buildSurface(obj, isSat){
   hudMode('surface');
   Audio2.ambience(airless? 44 : 96, airless? 0.035 : 0.075);
 }
-function buildWalker(isRover){
+function buildWalker(isRover, air){
   const g = new THREE.Group();
   if(isRover){
     const body = new THREE.Mesh(new THREE.BoxGeometry(2.6,0.9,4.0), metalMat(0xc9ccd2)); body.position.y=1.25; g.add(body);
@@ -4044,6 +4273,25 @@ function buildWalker(isRover){
     for(const s of [-1,1]) for(const u of [-1,0,1]){
       const w = new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.44,10), rockMat(0x21242b));
       w.rotation.z = Math.PI/2; w.position.set(s*1.5, 0.62, u*1.45); g.add(w); g.userData.wheels.push(w);
+    }
+  } else if(air){
+    /* 地球（酸素がある）＝宇宙服は着ない。洋服＋日除けの帽子で歩く（2026-09-23 タイタン指示）。
+       干上がった地表なので、色は埃をかぶった生成りと藍に寄せてある。 */
+    const shirt = new THREE.MeshStandardMaterial({color:0x5b7fa8, roughness:0.95, flatShading:true});
+    const pants = new THREE.MeshStandardMaterial({color:0x3b4250, roughness:0.98, flatShading:true});
+    const skin  = new THREE.MeshStandardMaterial({color:0xd8ae84, roughness:0.9,  flatShading:true});
+    const straw = new THREE.MeshStandardMaterial({color:0xcbb178, roughness:1,    flatShading:true});
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.40,1.10,8), shirt); torso.position.y=1.34; g.add(torso);
+    const neck  = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.18,6), skin);  neck.position.y=1.96; g.add(neck);
+    const head  = new THREE.Mesh(new THREE.SphereGeometry(0.28,12,9), skin);           head.position.y=2.20; g.add(head);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.29,0.31,0.22,12), straw);crown.position.y=2.36; g.add(crown);
+    const brim  = new THREE.Mesh(new THREE.CylinderGeometry(0.50,0.50,0.035,14), straw);brim.position.y=2.26; g.add(brim);
+    g.userData.legs=[];
+    for(const s of [-1,1]){
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.12,1.0,6), pants);
+      leg.position.set(s*0.18,0.5,0); g.add(leg); g.userData.legs.push(leg);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.09,0.92,6), shirt);
+      arm.position.set(s*0.50,1.44,0); arm.rotation.z = s*0.16; g.add(arm); g.userData.legs.push(arm);
     }
   } else {
     const suit = new THREE.MeshStandardMaterial({color:0xe9edf2, roughness:0.62, metalness:0.12, flatShading:true});
@@ -4146,6 +4394,7 @@ function updSurface(dt){
   const climb = G.rover ? 1.15 : 1.25;
   const rideLimit = Math.max(pl.y+0.12, meshHeightAt(pl.x,pl.z)+climb);
   pushOutOfRocks(pl, rideLimit, G.rover ? 1.45 : 0.55);
+  pushOutOfAnimals(pl, G.rover ? 1.45 : 0.55);        // 生き物も通り抜けない
   // 重力：上昇は実重力のまま、落下だけ1.4倍にして滞空を締める（低重力の操作性）
   const rTop = rockTopAt(pl.x, pl.z);
   const gy = (rTop > -Infinity && rTop <= rideLimit)
@@ -4220,7 +4469,7 @@ function updSurface(dt){
     if(G.stepAcc > stp.every){ G.stepAcc = 0; stp.play(); }
   } else G.stepAcc = 0;
   updAnimals(dt);
-  updGeysers(dt); updHaze(dt); updWeatherFx(dt);
+  updGeysers(dt); updHaze(dt); updWeatherFx(dt); updLakes(dt);
   if(G.shake) G.shake.set(0,0,0);
   updWeather(dt);
   if(G.shake) camera.position.add(G.shake);
@@ -4510,6 +4759,69 @@ function openMap(){
   setControllerLabels('決定', '日誌', '戻る');
 }
 
+/* ── 星図のカーソル操作（十字キー＋A）──────────────
+   段組は画面幅で 2列 / 5列 に変わるため、移動先は要素の実座標から決める。
+   まっすぐ近いものを選び、行き止まりなら同じ行／列の反対の端へ回り込む。 */
+const MAP_NAV_FIRST = 0.34, MAP_NAV_REPEAT = 0.12;   // 秒。初回は溜めて、押しっぱなしは連射
+let mapNavDir = '', mapNavWait = 0;
+function mapItems(){ return Array.from($('rail').querySelectorAll('.pick-item')); }
+function moveMapCursor(dir){
+  const items = mapItems(); if(items.length < 2) return;
+  const cur = $('rail').querySelector('[data-id="'+SEL+'"]') || items[0];
+  const c = cur.getBoundingClientRect();
+  const cx = c.left + c.width/2, cy = c.top + c.height/2;
+  const horiz = (dir==='left' || dir==='right');
+  let best = null, bestScore = Infinity;
+  items.forEach(el=>{
+    if(el===cur) return;
+    const r = el.getBoundingClientRect();
+    const dx = (r.left + r.width/2) - cx, dy = (r.top + r.height/2) - cy;
+    const fwd  = dir==='left' ? -dx : dir==='right' ? dx : dir==='up' ? -dy : dy;
+    const side = horiz ? Math.abs(dy) : Math.abs(dx);
+    if(fwd <= 2) return;                       // その方向には無い
+    const score = fwd + side*3;                // まっすぐ近いものを優先
+    if(score < bestScore){ bestScore = score; best = el; }
+  });
+  if(!best){                                   // 行き止まり＝反対の端へ回り込む
+    const lane = items.filter(el=>{
+      const r = el.getBoundingClientRect();
+      return horiz ? Math.abs((r.top + r.height/2) - cy) < c.height*0.6
+                   : Math.abs((r.left + r.width/2) - cx) < c.width*0.6;
+    });
+    const pool = (lane.length > 1) ? lane : items;
+    const key = el => { const r = el.getBoundingClientRect(); return horiz ? r.left : r.top; };
+    const sorted = pool.slice().sort((a,b)=>key(a)-key(b));
+    best = (dir==='right' || dir==='down') ? sorted[0] : sorted[sorted.length-1];
+  }
+  if(!best || best===cur) return;
+  SEL = best.dataset.id;
+  renderRail(); renderDetail();
+  best.scrollIntoView({block:'nearest', inline:'nearest'});
+}
+function stepMapCursor(dt){
+  if(!$('map') || $('map').hidden || !$('log').hidden){ mapNavDir=''; mapNavWait=0; return; }
+  const dir = K.ArrowUp ? 'up' : K.ArrowDown ? 'down' : K.ArrowLeft ? 'left' : K.ArrowRight ? 'right' : '';
+  if(!dir){ mapNavDir=''; mapNavWait=0; return; }
+  if(dir !== mapNavDir){ mapNavDir = dir; mapNavWait = MAP_NAV_FIRST; moveMapCursor(dir); return; }
+  mapNavWait -= dt;
+  if(mapNavWait <= 0){ mapNavWait = MAP_NAV_REPEAT; moveMapCursor(dir); }
+}
+/* 星図での決定。ボタンのタップとAボタンが同じ関数を通る（入口を1つにする） */
+function mapDecide(){
+  if(!$('log').hidden){ toggleLog(); return; }   // 日誌が開いていたら閉じるのが先
+  departToSelected();
+}
+function departToSelected(){
+  if(!bodyUnlocked(SEL)){
+    const r = unlockNeed(SEL), sh = shipTier();
+    toast('航路封鎖','船体強度が足りない','科学素材をあと '+Math.max(0, r.need-sh.count)+' 個集める', false);
+    return;
+  }
+  Audio2.init();
+  $('map').hidden = true;
+  startCruise(SEL);
+}
+
 /* ── 航海日誌 ─────────────────────────────── */
 function toggleLog(){
   const l = $('log');
@@ -4610,16 +4922,7 @@ function boot(){
   bindTapBtn('btnLog2', toggleLog);
   bindTapBtn('btnLogX', toggleLog);
   bindTapBtn('btnMap2', openMap);
-  bindTapBtn('btnGo', ()=>{
-    if(!bodyUnlocked(SEL)){
-      const r=unlockNeed(SEL), s=shipTier();
-      toast('航路封鎖','船体強度が足りない','科学素材をあと '+Math.max(0,r.need-s.count)+' 個集める',false);
-      return;
-    }
-    Audio2.init();
-    $('map').hidden = true;
-    startCruise(SEL);
-  });
+  bindTapBtn('btnGo', departToSelected);
   bindTapBtn('btnEndLog', ()=>{ $('ending').hidden=true; renderLog(); $('log').hidden=false; });
   bindTapBtn('btnEndMap', openMap);
   $('log').addEventListener('pointerdown', e=>{ if(e.target===$('log')) toggleLog(); });
