@@ -608,6 +608,22 @@ const SURF = {
          amb:0.22, sun:1.05, rough:2.0, scale:0.02, craters:6, props:'shard', star:1 },
   dune:{ ground:[0xb07038,0x8d5527], rock:0x6f4520, sky:[0x5a3210,0xd89a4e], fogNear:80, fogFar:380,
          amb:0.55, sun:0.7, rough:5.0, scale:0.009, craters:0, props:'lake', star:0 },
+  /* 2026-09-23 イオ：硫黄の火山世界。大気なし。黄〜橙の地面に硫黄の噴煙 */
+  sulfur:{ ground:[0xa8801c, 0xe0c45c], rock:0x7a4610, sky:[0x000000,0x000000], fogNear:380, fogFar:900,
+         amb:0.20, sun:1.3, rough:3.0, scale:0.014, craters:2, props:'shard', star:1,
+         geyser:'sulfur' },
+  /* 2026-09-23 ガニメデ：明るい溝状地形（サルカス）が暗い古地殻を切る。太陽系最大の衛星 */
+  sulci:{ ground:[0x5b5c66, 0x9ba4b1], rock:0x45464f, sky:[0x000000,0x000000], fogNear:340, fogFar:860,
+         amb:0.20, sun:1.15, rough:2.2, scale:0.015, craters:14, props:'ice', star:1,
+         gloss:0.6, bump:0.3, crack:'sulci', crackCol:0xd9e2ee, crackMix:0.8 },
+  /* 2026-09-23 カリスト：太陽系でいちばんクレーターが多い。暗い氷と岩の混合、地質活動なし */
+  cratered:{ ground:[0x4c443c, 0x7b7064], rock:0x37312b, sky:[0x000000,0x000000], fogNear:360, fogFar:880,
+         amb:0.16, sun:1.1, rough:2.8, scale:0.016, craters:58, props:'base', star:1 },
+  /* 2026-09-23 エンケラドス：白い氷の全球に水色の亀裂（タイガーストライプ）。南極から水柱 */
+  tiger:{ ground:[0xdcecf8, 0xf5fbff], rock:0xc6dded, sky:[0x000000,0x000000], fogNear:320, fogFar:840,
+         amb:0.34, sun:1.2, rough:1.4, scale:0.017, craters:2, props:'shard', star:1,
+         geyser:'water', gloss:0.32, metal:0.05, bump:0.18,
+         crack:'tiger', crackCol:0x3fb6e0, crackMix:0.92 },
   /* 2026-09-23 エウロパ専用。ミランダ・トリトンの ice とは分け、平らな氷原＋リネアにする */
   icefield:{ ground:[0xdcefff,0x8fb4d4], rock:0xc3dbec, sky:[0x000000,0x000000], fogNear:300, fogFar:820,
          amb:0.30, sun:1.15, rough:1.5, scale:0.016, craters:3, props:'shard', star:1,
@@ -682,11 +698,35 @@ const BODIES = [
           {k:'band',n:'縞と帯',t:'白い帯が上昇流、褐色の縞が下降流。惑星全体が一枚の天気図。'},
           {k:'aur',n:'極のオーロラ',t:'地球の百倍の明るさ。磁気圏が衛星から剥がした物質で光っている。'},
           {k:'io',n:'イオの火山',t:'すれ違いに見えた。潮汐で内部が練られ、硫黄の噴煙が三百キロ上がっている。'} ],
-    sat:{ id:'europa', name:'エウロパ', surf:'icefield', moonSky:'jupiter', grav:'0.13 G',
+    /* ガリレオ衛星4体（2026-09-23）。orbitR・size は実際の順序を保ったまま画面用に詰めた値。
+       実比だとカリストは木星半径の26倍で、周回できる範囲（R*9）の外へ出てしまう。
+       大きさの順（ガニメデ＞カリスト＞イオ＞エウロパ）は実物どおり。 */
+    sats:[
+    { id:'io', name:'イオ', surf:'sulfur', moonSky:'jupiter', grav:'0.18 G',
+      orbitR:2.2, size:0.135, orbTex:'rock', orbColor:0xdcc05c,
+      finds:[ {k:'patera',n:'活火山パテラ',t:'噴煙が三百キロ上がる。大気が無いので煙は傘の形に広がって落ちる。'},
+              {k:'sul',n:'硫黄の平原',t:'黄、橙、白。温度で色が変わる硫黄が、そのまま地図になっている。'},
+              {k:'lava',n:'溶岩湖',t:'縁だけが赤い。中心は冷えた殻で覆われ、ときどき割れて下の熱が覗く。'},
+              {k:'tide',n:'潮汐加熱の割れ目',t:'木星とエウロパに引き合われ、内部が練られて熱を持つ。太陽ではなく重力で温まる星。'} ] },
+    { id:'europa', name:'エウロパ', surf:'icefield', moonSky:'jupiter', grav:'0.13 G',
+      orbitR:3.0, size:0.118, orbTex:'ice', orbColor:0xdae6ef,
       finds:[ {k:'lin',n:'氷の裂け目（リネア）',t:'赤褐色の筋が全球を走る。下の海の塩が染み出した色だという。'},
               {k:'tide',n:'潮汐の隆起',t:'木星に引かれて氷殻が三十メートル上下する。立っていると分からない。'},
               {k:'plume',n:'氷下海のプルーム',t:'裂け目から水蒸気。海はここから二十キロ下にある。'},
-              {k:'jrise',n:'木星の出',t:'空の四分の一が木星。衛星は同じ面をずっと向けているので、位置が動かない。'} ] } },
+              {k:'jrise',n:'木星の出',t:'空の四分の一が木星。衛星は同じ面をずっと向けているので、位置が動かない。'} ] },
+    { id:'ganymede', name:'ガニメデ', surf:'sulci', moonSky:'jupiter', grav:'0.15 G',
+      orbitR:4.1, size:0.175, orbTex:'rock', orbColor:0x9a9086,
+      finds:[ {k:'sulci',n:'溝状地形（サルカス）',t:'明るい帯が暗い古地殻を切っている。切った順に、この星の歴史が並んでいる。'},
+              {k:'mag',n:'固有の磁場',t:'衛星でありながら自前の磁場を持つ。中心に溶けた鉄の核がある証拠。'},
+              {k:'ocean',n:'氷の下の海',t:'百五十キロ下。塩水の層が氷に挟まれている。太陽系でいちばん水が多い天体だという。'},
+              {k:'big',n:'太陽系最大の衛星',t:'水星より大きい。惑星でないのは、回っている相手が太陽ではないというだけの理由。'} ] },
+    { id:'callisto', name:'カリスト', surf:'cratered', moonSky:'jupiter', grav:'0.13 G',
+      orbitR:5.6, size:0.162, orbTex:'rock', orbColor:0x6b6157,
+      finds:[ {k:'valhalla',n:'ヴァルハラ多重リング',t:'直径三千八百キロの同心円。衝突の波が凍ったまま残っている。'},
+              {k:'crat',n:'埋まらないクレーター',t:'新しい穴が古い穴を消していくだけ。四十億年、それ以外に何も起きていない。'},
+              {k:'quiet',n:'地質活動のない世界',t:'木星から遠く、潮汐で練られない。温まらないことが、この星の記録を守った。'},
+              {k:'dark',n:'暗い塵の層',t:'氷が昇華したあとに残った黒い粉。手で払うと、下から白い氷が出てくる。'} ] }
+    ] },
 
   { id:'saturn', name:'土星', kana:'SATURNUS', type:'giant', color:0xe2cd9b, tex:'band', rad:320, rings:true,
     au:'9.6 AU', cruise:5200, grav:'1.07 G',
@@ -695,11 +735,22 @@ const BODIES = [
           {k:'hex',n:'北極の六角形',t:'直径三万キロの正六角形の渦。なぜ六角なのか、まだ誰も説明できていない。'},
           {k:'shadow',n:'環の影',t:'雲の上に細い線が落ちている。影にも隙間の模様が写っている。'},
           {k:'thin',n:'環の厚み',t:'真横から見るとほとんど消える。幅二十万キロ、厚みは十数メートル。'} ],
-    sat:{ id:'titan', name:'タイタン', surf:'dune', moonSky:'saturn', grav:'0.14 G',
+    /* エンケラドスは土星のすぐそば（実測 3.95 土星半径／タイタンは 20.3）。
+       主環は半径2.32までなので、環のすぐ外側の 2.6 に置いて「近さ」を見せる。 */
+    sats:[
+    { id:'enceladus', name:'エンケラドス', surf:'tiger', moonSky:'saturn', grav:'0.011 G',
+      orbitR:2.6, size:0.062, orbTex:'ice', orbColor:0xeef8ff,
+      finds:[ {k:'tiger',n:'タイガーストライプ',t:'南極に走る四本の裂け目。周りより温かく、下の海の水色が透けている。'},
+              {k:'plume',n:'南極のプルーム',t:'裂け目から水が噴き上がる。重力が弱すぎて、半分は宇宙へ出ていく。'},
+              {k:'fresh',n:'降り積もる新しい氷',t:'噴き上げた水が雪になって戻る。足跡がすぐ埋まるほど地面が若い。'},
+              {k:'ering',n:'E環の供給源',t:'この星の噴出が土星のE環そのものになっている。環の材料が、いま足元から出ている。'} ] },
+    { id:'titan', name:'タイタン', surf:'dune', moonSky:'saturn', grav:'0.14 G',
+      orbitR:6.8, size:0.17, orbTex:'cloud', orbColor:0x8fb57e,
       finds:[ {k:'lake',n:'メタンの湖',t:'液体メタンの湖面。風で立つ波が、水よりゆっくりしている。'},
               {k:'idune',n:'氷の砂丘',t:'砂に見えるが有機物の粒。赤道に沿って数百キロの縦列をつくる。'},
               {k:'haze',n:'橙色の濃霧',t:'窒素とメタンの霞。太陽は方向の分かる明るい斑点にしかならない。'},
-              {k:'ring',n:'見上げた環',t:'霞の切れ目から土星の環。この星の名前を持つ者として、記録しておく。'} ] } },
+              {k:'ring',n:'見上げた環',t:'霞の切れ目から土星の環。この星の名前を持つ者として、記録しておく。'} ] }
+    ] },
 
   { id:'uranus', name:'天王星', kana:'URANUS', type:'giant', color:0x9fd8dc, tex:'band', rad:230, rings:true,
     au:'19.2 AU', cruise:6200, grav:'0.89 G',
@@ -1011,6 +1062,29 @@ function riftCut(x,z,s,ang,off,depth,width){
   if(dd >= width) return 0;
   return -depth*Math.pow(Math.cos(dd/width*Math.PI/2), 1.5);
 }
+/* 亀裂・溝の定義 [向き, 中心線のずれ, 幅, 深さ]。
+   地形を掘る（riftCut）のと、その溝に色を塗る（crackAt）のを同じ表から作る。
+   別々に持つと「色はあるのに溝が無い」「溝はあるのに色が無い」が必ず起きる。 */
+const CRACKS = {
+  // エンケラドス：南極のタイガーストライプ。ほぼ平行な4本
+  tiger:[[0.16,-34,7,3.0],[0.16,-6,6,2.6],[0.16,22,7,2.8],[0.16,52,6,2.4]],
+  // ガニメデ：サルカス（溝状地形）。向きの違う帯が互いを切る
+  sulci:[[0.30,-96,14,4.2],[0.30,-40,12,3.6],[0.30,16,13,3.8],
+         [1.42,-70,10,3.0],[1.42,44,11,3.2],[-0.95,110,9,2.6]]
+};
+/* その地点が溝の中にどれだけ入っているか 0〜1。riftCut と同じ蛇行式を使う */
+function crackAt(x,z){
+  const list = TER && CRACKS[TER.cfg.crack]; if(!list) return 0;
+  const s = TER.seed; let best = 0;
+  for(let i=0;i<list.length;i++){
+    const c = list[i], ca = Math.cos(c[0]), sa = Math.sin(c[0]);
+    const u = x*ca + z*sa, v = -x*sa + z*ca - c[1];
+    const wob = Math.sin(u*0.019)*13 + Math.sin(u*0.0071+1.7)*21 + (fbm(u*0.008, c[1]*0.07, s+5, 2)-0.5)*24;
+    const dd = Math.abs(v - wob);
+    if(dd < c[2]) best = Math.max(best, Math.pow(Math.cos(dd/c[2]*Math.PI/2), 0.55));
+  }
+  return best;
+}
 function heightAt(x,z){
   if(!TER) return 0;
   const c = TER.cfg, s = TER.seed;
@@ -1035,6 +1109,12 @@ function heightAt(x,z){
     h += riftCut(x,z,s, 1.15,   24, 2.2,  6);
     h += riftCut(x,z,s,-1.05,   96, 2.9,  8);
     h += riftCut(x,z,s, 2.35, -120, 2.0,  5);
+  }
+  if(TER.cfg.crack){
+    // 亀裂は CRACKS の表どおりに掘る（色を塗る crackAt と必ず同じ線になる）
+    const list = CRACKS[TER.cfg.crack];
+    if(TER.name==='tiger') h *= 0.35;          // エンケラドスはほぼ平らな氷原
+    for(let i=0;i<list.length;i++) h += riftCut(x,z,s, list[i][0], list[i][1], list[i][3], list[i][2]);
   }
   if(TER.name==='rocky'){
     // 火星：マリネリス峡谷（2026-09-23）。本谷1本＋外側の支谷1本＋横切る枝谷1本。
@@ -2609,11 +2689,17 @@ function checkComplete(){
 /* ===========================================================
    地表 — 降下・歩行・探査車・発見
    =========================================================== */
-const GRAV = { earth:21, moon:3.5, mercury:8, venus:19, mars:8, europa:2.6, titan:2.9, miranda:1.3, triton:1.7 };
+/* 画面上の重力。地球=21 が 1G。実際の表面重力比をそのまま掛けている。
+   ミランダ(実際0.0079G→0.17)とエンケラドス(0.0113G→0.24)だけは低すぎて操作不能に
+   なるため 1.3 / 1.1 まで持ち上げてある（跳躍の上限クランプ4.7倍に当たる帯）。 */
+const GRAV = { earth:21, moon:3.5, mercury:8, venus:19, mars:8, europa:2.6, titan:2.9,
+               miranda:1.3, triton:1.7,
+               io:3.8, ganymede:3.1, callisto:2.7, enceladus:1.1 };
 const SKY_ONLY = { 'europa:jrise':1, 'titan:ring':1 };
 /* 地表の気温。地球は温暖化がかなり進んだ想定の値を入れている（2026-09-23） */
 const SURF_TEMP = { earth:'+48 ℃', moon:'+110 ℃', mercury:'−173 ℃', venus:'+464 ℃',
-  mars:'−63 ℃', europa:'−171 ℃', titan:'−179 ℃', miranda:'−187 ℃', triton:'−235 ℃' };
+  mars:'−63 ℃', europa:'−171 ℃', titan:'−179 ℃', miranda:'−187 ℃', triton:'−235 ℃',
+  io:'−143 ℃', ganymede:'−163 ℃', callisto:'−139 ℃', enceladus:'−198 ℃' };
 /* 視点を上へ振り切ったときの仰角(rad)。空の親星は仰角 0.34（木星）〜0.40（土星）に
    置いてあるので、少し上の 0.50 を向けば的が画面の中ほどに入る */
 const SKY_AIM = 0.50;
@@ -2645,8 +2731,10 @@ function gradientSky(top, bottom){
     new THREE.MeshBasicMaterial({map:t, side:THREE.BackSide, fog:false, depthWrite:false}));
   return m;
 }
+const CRACK_COLOR = new THREE.Color();
 function buildTerrain(cfg){
   const S=480, N=144;
+  if(cfg.crackCol) CRACK_COLOR.setHex(cfg.crackCol);
   TERMESH = null;                       // 前の星のグリッドを接地に使わない
   const geo = new THREE.PlaneGeometry(S,S,N,N);
   geo.rotateX(-Math.PI/2);
@@ -2662,6 +2750,8 @@ function buildTerrain(cfg){
     const grain = fbm(x*0.18,z*0.18,TER.seed+57,3)-0.5;
     const t = clamp(0.5 + y*0.055 + grain*0.34 - slope*0.9, 0, 1);
     c.copy(cA).lerp(cB, t);
+    // 亀裂の底を別色で塗る（エンケラドスの水色のタイガーストライプ／ガニメデの明るいサルカス）
+    if(cfg.crackCol){ const cr = crackAt(x,z); if(cr > 0) c.lerp(CRACK_COLOR, cr*cfg.crackMix); }
     col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col,3));
@@ -2789,6 +2879,9 @@ const GEYSER = {
   // トリトンは氷原が明るいので加算合成では消える。暗い噴煙として普通に重ねる。
   water:{ n:150, color:0xeaf8ff, size:1.0, mouth:1.1, speed:13, grav:2.6, spread:1.2,
           wind:0.3, life:4.2, dur:3.6, gap:5.5, opacity:0.95, sound:0.9, count:7, add:true },
+  // イオ：硫黄の噴煙。重力が弱く真空なので、高く上がって傘のように広がる
+  sulfur:{ n:130, color:0xf4d878, size:1.15, mouth:1.5, speed:17, grav:1.9, spread:1.0,
+          wind:0.8, life:5.4, dur:4.4, gap:6.5, opacity:0.8, sound:1.0, count:6, add:true },
   cryo: { n:70, color:0x3b444e, size:0.95, mouth:0.5, speed:8.5, grav:1.7, spread:0.3,
           wind:2.6, life:6.5, dur:3.4, gap:11, opacity:0.62, sound:0.6, count:4, add:false, streak:true }
 };
