@@ -296,6 +296,8 @@
   @keyframes slideIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
   #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
   #boltFlash{position:absolute;inset:0;background:#ffeec6;opacity:0;pointer-events:none;mix-blend-mode:screen}
+  /* ダッシュ中のBボタン。押下表現はクラス付替えのみ（再描画ゼロ） */
+  #fc-btn-b.dashing{filter:brightness(1.35) saturate(1.2);box-shadow:0 0 0 3px rgba(255,235,180,.75) inset}
 
   /* ── 航海日誌 ──────────────────────────── */
   #log{background:rgba(3,5,12,.82);backdrop-filter:blur(7px);overflow:auto}
@@ -1642,7 +1644,9 @@ let CUR = null, CURSAT = false;   // 現在の天体 / 衛星側か
 let pendingShot = null;
 
 const K = {};
-const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5, tboost:0, steerX:0, steerY:0 };
+const IN = { fwd:0, side:0, pitch:0, yaw:0, boost:0, jump:false, look:{x:0,y:0}, zoom:8.5, tboost:0, steerX:0, steerY:0, dash:0 };
+const DASH_MUL = 3;               // ダッシュ時の速度倍率（人も探査車も3倍）
+const DASH_HOLD_MS = 200;         // これ以上押し続けたらダッシュ、それ未満は撮影
 function usePadHint(){
   try{ return window.matchMedia('(pointer:coarse)').matches || window.innerWidth<=640; }catch(e){ return window.innerWidth<=640; }
 }
@@ -1800,7 +1804,49 @@ function bindInput(){
     else if(MODE==='surface' && !G.nearFind) IN.jump = true;
     else act('record');
   });
-  tap('fc-btn-b', () => { if(!PAUSED) act('shoot'); });
+  /* B: 短押し＝撮影、押しっぱなし＝ダッシュ（3倍速）。
+     押した瞬間に撮る旧仕様だと長押しでも必ず1枚撮れてしまうため、
+     離した時点で「長押しではなかった」ものだけ撮る（2026-09-23）。 */
+  (function bindDashButton(){
+    const el = $('fc-btn-b'); if(!el) return;
+    let timer = null, pid = null, dashing = false, active = false;
+    const startDash = () => {
+      timer = null;
+      if(PAUSED) return;
+      dashing = true; IN.dash = 1;
+      el.classList.add('dashing');
+      if(navigator.vibrate) navigator.vibrate(12);
+    };
+    const down = e => {
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      e.preventDefault();
+      pid = e.pointerId;
+      try{ el.setPointerCapture(e.pointerId); }catch(_){}
+      el.classList.add('pressed');
+      if(navigator.vibrate) navigator.vibrate(15);
+      unlockAudio();
+      dashing = false; active = true;
+      if(timer) clearTimeout(timer);
+      timer = setTimeout(startDash, DASH_HOLD_MS);
+    };
+    const end = e => {
+      // pointerup のあとに lostpointercapture も飛ぶ。1回の押下で2回走ると
+      // 「長押しで走ったのに離した瞬間に撮影される」ので、1回だけ処理する
+      if(!active) return;
+      if(e && pid != null && e.pointerId !== pid) return;
+      active = false; pid = null;
+      if(timer){ clearTimeout(timer); timer = null; }
+      el.classList.remove('pressed'); el.classList.remove('dashing');
+      IN.dash = 0;
+      if(!dashing && !PAUSED) act('shoot');       // 長押しにならなかった＝撮影
+      dashing = false;
+    };
+    el.addEventListener('pointerdown', down, {passive:false});
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    regAct(el, ()=>{ if(!PAUSED) act('shoot'); });   // キー割り当てからは従来どおり撮影
+  })();
   tap('fc-btn-select', () => {
     if(PAUSED) return;
     if(MODE==='surface'){
@@ -1817,6 +1863,7 @@ function bindInput(){
     if(k==='e') act('record');
     if(k==='p') act('shoot');
     if(k==='q') act('skygaze');
+    if(k==='x') IN.dash = 1;                      // Bボタンと同じ。押している間ダッシュ
     if(k==='l') act('land');
     if(k==='c') G.rear = !G.rear;
     if(k==='f') { if(MODE==='cruise'){ G.auto=!G.auto; toast('操縦',G.auto?'自動操縦 入':'自動操縦 切','',true);} }
@@ -1831,9 +1878,10 @@ function bindInput(){
     if(k===' ') e.preventDefault();
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(k)>=0) e.preventDefault();
   };
-  const up = e => { const k = e.key.length===1?e.key.toLowerCase():e.key; K[k]=false; };
+  const up = e => { const k = e.key.length===1?e.key.toLowerCase():e.key; K[k]=false;
+    if(k==='x') IN.dash = 0; };
   window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-  window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; });
+  window.addEventListener('blur', ()=>{ for(const k in K) K[k]=false; IN.tboost=0; IN.dash=0; });
   document.addEventListener('pointerdown', unlockAudio, { once:true });
   document.addEventListener('visibilitychange', ()=>{
     if(document.hidden){ BGM.suspend(); if(MODE!=='attract' && MODE!=='boot') setPaused(true); }
@@ -1858,7 +1906,9 @@ function bindInput(){
     } else {
       IN.look.x += dx*0.0042; IN.look.y += dy*0.0035;
       IN.look.y = clamp(IN.look.y, -0.62, 0.95);
-      if(Math.abs(dy) > 1){ G.skyGaze = false; G.skyReturn = false; }   // 手で動かしたら自動制御を解除
+      // 手で動かしたら自動の上げ下げは止める。ただし「見上げているか」は
+      // 仰角そのもので判定するので、［視点を戻す］は押せばいつでも効く
+      if(Math.abs(dy) > 1){ G.skyGaze = false; G.skyReturn = false; }
     }
     lx=e.clientX; ly=e.clientY;
   };
@@ -2336,10 +2386,12 @@ function act(kind){
   }
   if(kind==='skygaze'){
     if(MODE==='surface'){
-      G.skyGaze = !G.skyGaze;
-      G.skyReturn = !G.skyGaze;                 // 解除したら地表の高さへ戻す
+      // 「いま見上げているか」で決める。ドラッグで上げた状態から押しても必ず下がる
+      const up = isLookingUp() || G.skyGaze;
+      G.skyGaze = !up;
+      G.skyReturn = up;
       toast('視点', G.skyGaze?'空を見上げる':'視点を戻す',
-            G.skyGaze? '左右で向きを変え、的を画面に入れて撮影' : '', true);
+            G.skyGaze? '左右で向きを変え、的を画面に入れて撮影' : '地表に視線を戻した', true);
     }
   }
   if(kind==='shoot'){
@@ -2456,6 +2508,11 @@ const SURF_TEMP = { earth:'+48 ℃', moon:'+110 ℃', mercury:'−173 ℃', venu
 const SKY_AIM = 0.50;
 const SKY_GAZE_PITCH = 0.95;      // 「空を見る」中の仰角（clamp の上限と同じ）
 const SURF_PITCH = 0.13;          // 地表の既定の仰角（buildSurface の初期値と同じ）
+/* いま見上げているか。フラグではなく実際の仰角で判定する。
+   ドラッグで視点を変えると自動制御のフラグが落ちるため、フラグで
+   ボタンの文言と動作を決めていると「見上げたままなのに［空を見る］表示」になり、
+   押しても下がらない状態になっていた（2026-09-23 修正）。 */
+function isLookingUp(){ return IN.look.y > (SURF_PITCH + SKY_GAZE_PITCH)*0.5; }
 const SKYSHOT = {
   moon:{ from:'moon', k:'rise', aim:'parent' }, mercury:{ from:'mercury', k:'big', aim:'sun' },
   mars:{ from:'mars', k:'dusk', aim:'sun' },
@@ -2759,6 +2816,49 @@ function updHaze(dt){
   h.geometry.attributes.position.needsUpdate = true;
 }
 
+/* ── 構造物の当たり判定（2026-09-23 新設）────────────────────
+   発見物の構造物（整備塔・ドーム・中央丘・モノリス・氷柱など）と着陸船は
+   見た目だけのメッシュで、キャラクターがそのまま通り抜け／めり込んでいた。
+   岩と同じ楕円体の台帳（G.rocks）へ、種類ごとの近似殻を積む。
+   [ローカルX, ローカルZ, 水平半径, 頂点の高さ] を並べる。 */
+const PROP_HULL = {
+  gantry:[[0,0,3.2,19]], moor:[[0,0,3.2,19]],
+  capsule:[[0,0,2.3,4.2]],
+  dish:[[0,0,1.1,7.0]],
+  mono:[[0,0,1.7,7.4]],
+  wind:[[0,0,0.6,8.2]],
+  dome:[[0,0,4.4,4.2]], hut:[[0,0,4.4,4.2]], base:[[0,0,4.4,4.2]],
+  peak:[[0,0,7.6,14.0]],
+  ridge:[[-18,0,3.4,7.0],[-9,0,3.4,7.0],[0,0,3.4,7.0],[9,0,3.4,7.0],[18,0,3.4,7.0]],
+  shard:[[0,0,2.8,7.0]], lin:[[0,0,2.8,7.0]], cryo:[[0,0,2.8,7.0]],
+  platform:[[0,0,6.2,2.0]], light:[[0,0,6.2,2.0]], rot:[[0,0,6.2,2.0]], drop:[[0,0,6.2,2.0]],
+  ice:null, patch:null, lake:null,                      // 平らな円盤。通行を妨げない
+  flag:[[1.6,1.2,0.5,2.4]], track:[[1.6,1.2,0.5,2.4]], foot:[[1.6,1.2,0.5,2.4]],
+  devil:[[1.6,1.2,0.5,2.4]], chan:[[1.6,1.2,0.5,2.4]], retro:[[1.6,1.2,0.5,2.4]],
+  melon:[[1.6,1.2,0.5,2.4]],
+  _default:[[0,0,3.0,2.6]]                              // 岩塊が4つ並ぶ既定形
+};
+const PROP_HULL_ROT = { ridge: 0.4 };                   // propFor 内で更に傾けている分
+/* 楕円体1個を台帳の形に直す。頂点が地面 +h に来るようにする */
+function hullToRock(x, z, ground, r, h){
+  return { x:x, z:z, cy:ground + h*0.25, rx:r, ry:h*0.75, m:null };
+}
+/* プロップ1個ぶんの殻を作る。戻り値は台帳へ push できる配列 */
+function propHulls(kind, x, z, rotY){
+  const spec = (kind in PROP_HULL) ? PROP_HULL[kind] : PROP_HULL._default;
+  if(!spec) return [];
+  const t = rotY + (PROP_HULL_ROT[kind] || 0), ct = Math.cos(t), st = Math.sin(t);
+  const out = [];
+  let maxR = 0;
+  for(const [dx,dz,r,h] of spec){
+    const wx = x + dx*ct + dz*st, wz = z - dx*st + dz*ct;
+    out.push(hullToRock(wx, wz, meshHeightAt(wx,wz), r, h));
+    if(r > maxR) maxR = r;
+  }
+  out.maxR = maxR;
+  return out;
+}
+
 /* ── 空に浮かぶ親天体 ───────────────────────── */
 function addSkyBody(kind){
   if(!kind) return null;
@@ -2829,6 +2929,7 @@ function buildSurface(obj, isSat){
 
   // 発見目標＋構造物
   G.finds = [];
+  const propRocks = [];                 // 構造物の殻。岩の間引きの後で台帳へ積む
   const list = (obj.finds||[]).filter(f => !SKY_ONLY[obj.id+':'+f.k]);
   list.forEach((f,i)=>{
     const a = i*2.399 + seed*0.4, d = 36 + (i%3)*32 + (i*17%26);
@@ -2842,6 +2943,11 @@ function buildSurface(obj, isSat){
     beam.position.set(x, y+6, z); scene.add(beam); mk.userData.beam = beam;
     mk.userData.rec = { key:obj.id+':'+f.k, n:f.n, t:f.t };
     mk.userData.done = done; mk.userData.ground = new THREE.Vector3(x,y,z);
+    // 構造物に当たり判定を持たせる。殻のぶんだけ記録できる距離も広げないと、
+    // 「塔に阻まれて自分の記録に近づけない」状態になる
+    const hulls = propHulls(f.k, x, z, a);
+    propRocks.push.apply(propRocks, hulls);
+    mk.userData.reach = 8.5 + (hulls.maxR || 0) * 0.75;
     scene.add(mk); G.finds.push(mk);
   });
   // 発見物と着陸船の周りからは岩を退ける（当たり判定が付いたので、塞ぐと記録できなくなる）
@@ -2853,6 +2959,8 @@ function buildSurface(obj, isSat){
     }
     return true;
   });
+  // 構造物と着陸船の殻は、岩の間引きが終わってから積む（消されないように）
+  G.rocks.push.apply(G.rocks, propRocks);
   // 噴出（エウロパの水柱・トリトンの窒素プルーム）
   const gk = cfg.geyser || (obj.id==='triton' ? 'cryo' : null);
   if(gk){
@@ -2904,6 +3012,7 @@ function buildSurface(obj, isSat){
   // 着陸船
   G.lander = buildShip(); G.lander.scale.setScalar(1.35);
   G.lander.position.set(-13, meshHeightAt(-13,7)+1.6, 7); G.lander.rotation.y = 0.9;
+  G.rocks.push(hullToRock(-13, 7, meshHeightAt(-13,7), 4.4, 5.0));   // 着陸船も通り抜けない
   if(G.lander.userData.flame) G.lander.userData.flame.visible = false;
   (G.lander.userData.flames||[]).forEach(f=>{ f.visible = false; });
   scene.add(G.lander);
@@ -2999,13 +3108,19 @@ function updSurface(dt){
     IN.look.y = lerp(IN.look.y, SURF_PITCH, clamp(dt*5,0,1));
     if(Math.abs(IN.look.y - SURF_PITCH) < 0.012){ IN.look.y = SURF_PITCH; G.skyReturn = false; }
   }
+  // 歩き出した／跳んだら地表へ視線を戻す。ボタンに辿り着けなくても抜け出せる
+  if((Math.abs(IN.fwd) > 0.1 || IN.jump) && (G.skyGaze || isLookingUp())){
+    G.skyGaze = false; G.skyReturn = true;
+  }
   const yaw = IN.look.x, pitch = IN.look.y;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const rx = Math.cos(yaw), rz = -Math.sin(yaw);
   const earthG=21, gravityRatio=clamp(G.grav/earthG,0.055,1.1);
   // 低重力では踏ん張りが弱く加速・減速が緩い。探査車も同じくタイヤの荷重が減る。
   const traction=Math.pow(gravityRatio,0.34);
-  const spd = (G.rover? 21 : 8.4) * (0.58+traction*0.42);
+  // ダッシュ: B押しっぱなし／Xキー。人も探査車も3倍速（2026-09-23）
+  const dashing = !!IN.dash && !PAUSED;
+  const spd = (G.rover? 21 : 8.4) * (0.58+traction*0.42) * (dashing? DASH_MUL : 1);
   const wantX = (fx*IN.fwd + rx*IN.side)*spd;
   const wantZ = (fz*IN.fwd + rz*IN.side)*spd;
   const accel = pl.ground? (3.2+6.3*traction) : (0.42+1.2*traction);
@@ -3081,7 +3196,7 @@ function updSurface(dt){
     G.contactShadow.quaternion.setFromUnitVectors(SURFACE_UP,contactNormalAt(pl.x,pl.z,0.8,climb));
   }
   // カメラ
-  const dist = IN.zoom * (G.rover?1.25:1);
+  const dist = IN.zoom * (G.rover?1.25:1) * (dashing? 1.14 : 1);
   const cx = pl.x - fx*dist*Math.cos(pitch), cz = pl.z - fz*dist*Math.cos(pitch);
   const cy = pl.y + 2.2 + dist*Math.sin(pitch)+0.8;
   const ground = meshHeightAt(cx,cz)+1.2;
@@ -3113,7 +3228,7 @@ function updSurface(dt){
     if(dd<nd){ nd=dd; near=m; }
     m.userData.glow.material.opacity = (m.userData.done?0.3:0.55)+Math.sin(T*2.2+m.position.x)*0.12;
   }
-  G.nearFind = (near && nd<8.5 && !near.userData.done) ? near : null;
+  G.nearFind = (near && nd < (near.userData.reach || 8.5) && !near.userData.done) ? near : null;
   if(near && nd<26) showLabel(near.userData.ground.clone().setY(near.userData.ground.y+7),
     (near.userData.done?'記録済 ':'') + near.userData.rec.n + (G.nearFind? ' ［E］':''));
   else hideLabel();
@@ -3127,16 +3242,17 @@ function updSurface(dt){
     l3:'発見', v3:got+' / '+all, bar: all? got/all*100 : 100 });
   const acts = [];
   if(G.nearFind) acts.push({l:'記録する', k:'E', f:()=>act('record')});
-  if(G.skyShot || G.skyGaze) acts.push({l: G.skyGaze?'視点を戻す':'空を見る', k:'Q', f:()=>act('skygaze')});
+  const lookingUp = isLookingUp() || G.skyGaze;
+  if(G.skyShot || lookingUp) acts.push({l: lookingUp?'視点を戻す':'空を見る', k:'Q', f:()=>act('skygaze')});
   acts.push({l:'撮影', k:'P', f:()=>act('shoot')});
   acts.push({l:'船に戻る', k:'SELECT', f:()=>enterOrbit(CUR)});
   setActions(acts);
   setHint((usePadHint()
-    ? '<b>十字</b> 前後・旋回 ・ <b>A</b> '+(G.nearFind?'記録':'ジャンプ')+' ・ <b>B</b> 撮影 ・ <b>SELECT</b> 船へ帰還'
-    : '<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影')
+    ? '<b>十字</b> 前後・旋回 ・ <b>A</b> '+(G.nearFind?'記録':'ジャンプ')+' ・ <b>B</b> 撮影／押しっぱなしで走る ・ <b>SELECT</b> 船へ帰還'
+    : '<b>WASD</b> 移動 ・ <b>X</b> 押しっぱなしで走る ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影')
     + (G.skyShot? ' ── <b style="color:var(--amber)">［空を見る］を押し、左右で向きを変えて空の'
         +(G.skyShotAim||'的')+'を画面に入れ、撮影</b>':''));
-  setControllerLabels(G.nearFind?'記録':'跳ぶ', '撮影', '帰還');
+  setControllerLabels(G.nearFind?'記録':'跳ぶ', dashing?'走る':'撮影/長押し走る', '帰還');
 }
 /* ===========================================================
    UI と進行 — 星図・日誌・計器
