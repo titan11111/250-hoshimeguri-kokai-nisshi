@@ -756,8 +756,7 @@ const BODIES = [
       orbitR:3.0, size:0.118, orbTex:'ice', orbColor:0xdae6ef,
       finds:[ {k:'lin',n:'氷の裂け目（リネア）',t:'赤褐色の筋が全球を走る。下の海の塩が染み出した色だという。'},
               {k:'tide',n:'潮汐の隆起',t:'木星に引かれて氷殻が三十メートル上下する。立っていると分からない。'},
-              {k:'plume',n:'氷下海のプルーム',t:'裂け目から水蒸気。海はここから二十キロ下にある。'},
-              {k:'jrise',n:'木星の出',t:'空の四分の一が木星。衛星は同じ面をずっと向けているので、位置が動かない。'} ] },
+              {k:'plume',n:'氷下海のプルーム',t:'裂け目から水蒸気。海はここから二十キロ下にある。'} ] },
     { id:'ganymede', name:'ガニメデ', surf:'sulci', moonSky:'jupiter', grav:'0.15 G',
       orbitR:4.1, size:0.175, orbTex:'rock', orbColor:0x9a9086,
       finds:[ {k:'sulci',n:'溝状地形（サルカス）',t:'明るい帯が暗い古地殻を切っている。切った順に、この星の歴史が並んでいる。'},
@@ -3420,7 +3419,11 @@ function checkComplete(){
 const GRAV = { earth:21, moon:3.5, mercury:8, venus:19, mars:8, europa:2.6, titan:2.9,
                miranda:1.3, triton:1.7,
                io:3.8, ganymede:3.1, callisto:2.7, enceladus:1.1 };
-const SKY_ONLY = { 'europa:jrise':1, 'titan:ring':1 };
+/* 地表に光柱を立てず、空を見上げて撮る記録。エウロパの「木星の出」は
+   2026-09-23 に廃止（HUDが4と言うのに地面には3本しか立たず、4本目の
+   在り処を知らせる唯一の手がかりであるヒント行が、白い氷原の上では
+   読めなかった。タイタン判断で 3/3 へ）。残るはタイタンの環のみ */
+const SKY_ONLY = { 'titan:ring':1 };
 /* 地表の気温。地球は温暖化がかなり進んだ想定の値を入れている（2026-09-23） */
 const SURF_TEMP = { earth:'+48 ℃', moon:'+110 ℃', mercury:'−173 ℃', venus:'+464 ℃',
   mars:'−63 ℃', europa:'−171 ℃', titan:'−179 ℃', miranda:'−187 ℃', triton:'−235 ℃',
@@ -3441,7 +3444,7 @@ function isLookingUp(){ return IN.look.y > (SURF_PITCH + SKY_GAZE_PITCH)*0.5; }
 const SKYSHOT = {
   moon:{ from:'moon', k:'rise', aim:'parent' }, mercury:{ from:'mercury', k:'big', aim:'sun' },
   mars:{ from:'mars', k:'dusk', aim:'sun' },
-  europa:{ from:'europa', k:'jrise', aim:'parent' }, titan:{ from:'titan', k:'ring', aim:'parent' }
+  titan:{ from:'titan', k:'ring', aim:'parent' }
 };
 
 function gradientSky(top, bottom){
@@ -4349,34 +4352,107 @@ function buildWalker(isRover, air){
     const pants = new THREE.MeshStandardMaterial({color:0x3b4250, roughness:0.98, flatShading:true});
     const skin  = new THREE.MeshStandardMaterial({color:0xd8ae84, roughness:0.9,  flatShading:true});
     const straw = new THREE.MeshStandardMaterial({color:0xcbb178, roughness:1,    flatShading:true});
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.40,1.10,8), shirt); torso.position.y=1.34; g.add(torso);
-    const neck  = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.18,6), skin);  neck.position.y=1.96; g.add(neck);
-    const head  = new THREE.Mesh(new THREE.SphereGeometry(0.28,12,9), skin);           head.position.y=2.20; g.add(head);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.29,0.31,0.22,12), straw);crown.position.y=2.36; g.add(crown);
-    const brim  = new THREE.Mesh(new THREE.CylinderGeometry(0.50,0.50,0.035,14), straw);brim.position.y=2.26; g.add(brim);
-    g.userData.legs=[];
+    const body = new THREE.Group(); g.add(body);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.40,1.10,8), shirt); torso.position.y=1.34; body.add(torso);
+    const neck  = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.18,6), skin);  neck.position.y=1.96; body.add(neck);
+    const head  = new THREE.Mesh(new THREE.SphereGeometry(0.28,12,9), skin);           head.position.y=2.20; body.add(head);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.29,0.31,0.22,12), straw);crown.position.y=2.36; body.add(crown);
+    const brim  = new THREE.Mesh(new THREE.CylinderGeometry(0.50,0.50,0.035,14), straw);brim.position.y=2.26; body.add(brim);
+    // 宇宙服と同じ関節構造にする（回転軸を股と肩へ）
+    const gait = { legs:[], arms:[], knees:[], elbows:[], body:body, base:0 };
     for(const s of [-1,1]){
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.12,1.0,6), pants);
-      leg.position.set(s*0.18,0.5,0); g.add(leg); g.userData.legs.push(leg);
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.09,0.92,6), shirt);
-      arm.position.set(s*0.50,1.44,0); arm.rotation.z = s*0.16; g.add(arm); g.userData.legs.push(arm);
+      const hip = new THREE.Group(); hip.position.set(s*0.18, 1.00, 0); body.add(hip);
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.135,0.50,6), pants); thigh.position.y=-0.25; hip.add(thigh);
+      const knee = new THREE.Group(); knee.position.y=-0.50; hip.add(knee);
+      const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.125,0.105,0.42,6), pants); shin.position.y=-0.21; knee.add(shin);
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.12,0.34), pants); shoe.position.set(0,-0.46,0.05); knee.add(shoe);
+      gait.legs.push(hip); gait.knees.push(knee);
+
+      const sh = new THREE.Group(); sh.position.set(s*0.42, 1.80, 0); body.add(sh);
+      sh.rotation.z = s*0.10;
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.095,0.46,6), shirt); upper.position.y=-0.24; sh.add(upper);
+      const el = new THREE.Group(); el.position.y=-0.47; sh.add(el);
+      const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.092,0.080,0.40,6), skin); fore.position.y=-0.20; el.add(fore);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.095,7,6), skin); hand.position.y=-0.42; el.add(hand);
+      gait.arms.push(sh); gait.elbows.push(el);
     }
+    g.userData.gait = gait;
   } else {
-    const suit = new THREE.MeshStandardMaterial({color:0xe9edf2, roughness:0.62, metalness:0.12, flatShading:true});
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,1.15,8), suit); torso.position.y=1.32; g.add(torso);
-    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.9,0.42), metalMat(0xb9c0c9)); pack.position.set(0,1.38,-0.42); g.add(pack);
-    const helm = new THREE.Mesh(new THREE.SphereGeometry(0.38,14,10), suit); helm.position.y=2.12; g.add(helm);
-    const vis = new THREE.Mesh(new THREE.SphereGeometry(0.335,14,10),
-      new THREE.MeshStandardMaterial({color:0x1c2a3a, metalness:0.9, roughness:0.12, emissive:0x0a1a28}));
-    vis.position.set(0,2.12,0.1); vis.scale.z=0.8; g.add(vis);
-    g.userData.legs=[];
+    /* 宇宙飛行士（2026-09-23 作り直し）。旧版は円柱4本を胴に直接ぶら下げ、
+       それぞれの「真ん中」を軸に回していたので、腕は肩から振れず中央で
+       シーソーのように折れ、小刻みにパタパタして見えた。
+       関節ごとに Group を置き、メッシュはその中で半分ぶん下げて吊るす。
+       こうすると回転軸が肩・ひじ・股・ひざに来て、腕が肩から振れる。 */
+    const suit  = new THREE.MeshStandardMaterial({color:0xe9edf2, roughness:0.62, metalness:0.12, flatShading:true});
+    const soft  = new THREE.MeshStandardMaterial({color:0xd3d9e1, roughness:0.95, flatShading:true});  // 関節の布地
+    const dark  = new THREE.MeshStandardMaterial({color:0x2b3038, roughness:0.85, flatShading:true});
+    const gold  = new THREE.MeshStandardMaterial({color:0xc79a3a, metalness:0.95, roughness:0.18});
+    const body = new THREE.Group(); g.add(body);        // 上下の揺れと胴のひねりを受ける
+
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.40,0.50,1.12,10), suit); torso.position.y=1.33; body.add(torso);
+    const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.16,10), dark); waist.position.y=1.02; body.add(waist);
+    // 胸の制御盤と表示灯3つ
+    const ctrl = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.30,0.16), metalMat(0xd6dae0)); ctrl.position.set(0,1.42,0.40); body.add(ctrl);
+    [[-0.13,0x63d08a],[0,0xffd21e],[0.13,0xe06a52]].forEach(([lx,c])=>{
+      const led = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.03), new THREE.MeshBasicMaterial({color:c}));
+      led.position.set(lx,1.47,0.49); body.add(led);
+    });
+    // 生命維持装置（PLSS）と空気の管2本
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.66,0.88,0.36), metalMat(0xb9c0c9)); pack.position.set(0,1.40,-0.42); body.add(pack);
+    const pcap = new THREE.Mesh(new THREE.BoxGeometry(0.70,0.09,0.40), dark); pcap.position.set(0,1.88,-0.42); body.add(pcap);
+    const pbot = new THREE.Mesh(new THREE.BoxGeometry(0.70,0.09,0.40), dark); pbot.position.set(0,0.96,-0.42); body.add(pbot);
+    // 背面の窪んだ点検パネル（のっぺりした板に見えないように一段落とす）
+    const ppan = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.50,0.05), dark); ppan.position.set(0,1.40,-0.61); body.add(ppan);
+    // 通信アンテナ。装置の角から後ろへ寝かせる（頭の横を横切らせない）
+    const ant  = new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.42,4), metalMat(0x8f97a3));
+    ant.position.set(0.26,2.06,-0.56); ant.rotation.x = -0.30; body.add(ant);
+    const atip = new THREE.Mesh(new THREE.SphereGeometry(0.035,6,5), dark); atip.position.set(0.26,2.26,-0.62); body.add(atip);
     for(const s of [-1,1]){
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.13,1.0,6), suit);
-      leg.position.set(s*0.2,0.5,0); g.add(leg); g.userData.legs.push(leg);
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.11,0.95,6), suit);
-      arm.position.set(s*0.58,1.42,0); arm.rotation.z = s*0.22; g.add(arm); g.userData.legs.push(arm);
+      const hose = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.62,6), dark);
+      hose.position.set(s*0.26,1.58,-0.02); hose.rotation.x = 0.5; hose.rotation.z = s*0.28; body.add(hose);
     }
-    const lamp = glowSprite(0xffd79a, 1.6, 0.5); lamp.position.set(0,2.1,0.4); g.add(lamp);
+    // 首輪 → ヘルメット → 内バイザー → 金の日よけバイザー
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.30,0.055,6,14), metalMat(0xc9ced6));
+    ring.rotation.x = Math.PI/2; ring.position.y = 1.90; body.add(ring);
+    const helm = new THREE.Mesh(new THREE.SphereGeometry(0.38,16,12), suit); helm.position.y=2.14; body.add(helm);
+    const vis  = new THREE.Mesh(new THREE.SphereGeometry(0.345,16,12),
+      new THREE.MeshStandardMaterial({color:0x16202c, metalness:0.92, roughness:0.10, emissive:0x0a1a28}));
+    // 面体は前へ出して縁が立つようにする。ヘルメット球(0.38)の内側に収めると
+    // 平面シェーディングの面の隙間から覗くだけになり、顔が判別できない
+    vis.position.set(0,2.14,0.10); vis.scale.z=0.95; body.add(vis);
+    /* 日よけバイザーの覆い。前半分だけに掛ける（phiStart=0・phiLength=π が前面側）。
+       全周に掛けると頭頂まで金色になり「金のヘルメット」になってしまう */
+    const hood = new THREE.Mesh(new THREE.SphereGeometry(0.405,16,9, 0, Math.PI, 0, Math.PI*0.30), suit);
+    hood.position.set(0,2.14,0); hood.rotation.x = -0.20; body.add(hood);
+    const brim = new THREE.Mesh(new THREE.SphereGeometry(0.410,16,4, 0, Math.PI, Math.PI*0.27, Math.PI*0.07), gold);
+    brim.position.set(0,2.14,0); brim.rotation.x = -0.20; body.add(brim);
+
+    const gait = { legs:[], arms:[], knees:[], elbows:[], body:body, base:0 };
+    for(const s of [-1,1]){
+      /* 脚: 股(y=1.0) → 太もも → ひざ → すね → ブーツ。合計およそ1.0で旧版と同じ丈 */
+      const hip = new THREE.Group(); hip.position.set(s*0.20, 1.00, 0); body.add(hip);
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.165,0.145,0.46,7), suit); thigh.position.y=-0.23; hip.add(thigh);
+      const knee = new THREE.Group(); knee.position.y=-0.46; hip.add(knee);
+      const kb = new THREE.Mesh(new THREE.SphereGeometry(0.145,8,6), soft); knee.add(kb);
+      const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.135,0.115,0.40,7), suit); shin.position.y=-0.20; knee.add(shin);
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.16,0.42), dark); boot.position.set(0,-0.47,0.06); knee.add(boot);
+      gait.legs.push(hip); gait.knees.push(knee);
+
+      /* 腕: 肩(y=1.80) → 上腕 → ひじ → 前腕 → グローブ。回転軸が肩に来る */
+      const sh = new THREE.Group(); sh.position.set(s*0.50, 1.80, 0); body.add(sh);
+      sh.rotation.z = s*0.13;                       // 体側へわずかに開く
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.175,9,7), soft); sh.add(shoulder);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.135,0.118,0.44,7), suit); upper.position.y=-0.24; sh.add(upper);
+      const el = new THREE.Group(); el.position.y=-0.46; sh.add(el);
+      const eb = new THREE.Mesh(new THREE.SphereGeometry(0.125,8,6), soft); el.add(eb);
+      const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.115,0.100,0.38,7), suit); fore.position.y=-0.19; el.add(fore);
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.105,0.032,5,10), metalMat(0xc9ced6));
+      cuff.rotation.x = Math.PI/2; cuff.position.y=-0.36; el.add(cuff);
+      const glove = new THREE.Mesh(new THREE.BoxGeometry(0.19,0.21,0.15), dark); glove.position.y=-0.47; el.add(glove);
+      gait.arms.push(sh); gait.elbows.push(el);
+    }
+    g.userData.gait = gait;
+    const lamp = glowSprite(0xffd79a, 1.6, 0.5); lamp.position.set(0,2.1,0.4); body.add(lamp);
   }
   return g;
 }
@@ -4511,9 +4587,28 @@ function updSurface(dt){
       const suspension=clamp(contactHeight(wx,wz,climb)-pl.y,-0.38,0.38);
       w.position.y=lerp(w.position.y,0.62+suspension,clamp(dt*12,0,1));
     });
-  } else if(G.player.userData.legs){
-    const t = Math.sin(T*(6+moving*0.5))*clamp(moving*0.09,0,0.5);
-    G.player.userData.legs.forEach((l,i)=>{ l.rotation.x = t*(i%2?1:-1); });
+  } else if(G.player.userData.gait){
+    /* 歩き（2026-09-23 作り直し）。旧版は脚も腕も同じ配列に入れて
+       `i%2` で符号を振っていたため、左右の脚が同位相＝両脚同時に前後する
+       「パタパタ」になっていた。歩行は左脚と右腕が対になる（対側性）。
+       振り幅は速度で、角速度は速度の平方根で伸ばす（歩幅が先に伸びる）。 */
+    const ga = G.player.userData.gait;
+    const sp = clamp(moving*0.115, 0, 0.66);          // 振り幅(rad)。最大およそ38°
+    const w  = 3.1 + Math.sqrt(Math.max(moving,0))*1.35;
+    ga.base += dt*w;
+    const ph = Math.sin(ga.base) * sp;
+    for(let i=0;i<2;i++){
+      const d = i ? -1 : 1;                            // 左右で逆位相
+      ga.legs[i].rotation.x =  ph*d;
+      ga.arms[i].rotation.x = -ph*d*0.66;              // 腕は同じ側の脚と逆＝反対の脚と同じ
+      // ひざは脚を後ろへ送る側でだけ曲がる（前へ出す脚は伸びている）
+      ga.knees[i].rotation.x = -Math.max(0, -Math.sin(ga.base)*d) * sp*1.25;
+      // ひじは常に少し曲げ、振りに合わせて深くする
+      ga.elbows[i].rotation.x = -0.18 - Math.max(0, Math.sin(ga.base)*d) * sp*0.75;
+    }
+    // 胴は1歩に2回わずかに沈み、肩は腰と逆にひねる
+    ga.body.position.y = -Math.abs(Math.cos(ga.base)) * sp*0.10;
+    ga.body.rotation.y = ph*0.16;
   }
   if(G.contactShadow){
     const sh=contactHeight(pl.x,pl.z,climb);
