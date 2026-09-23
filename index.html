@@ -499,6 +499,7 @@
         <h3 id="dName">月</h3>
         <p class="mission" id="dMission"></p>
         <p class="meta" id="dStats"></p>
+        <p class="meta" id="dSpin"></p>
       </div>
       <div class="go">
         <button class="btn primary" id="btnGo">月へ出発</button>
@@ -2373,6 +2374,26 @@ function spinRate(id){
   return (r[0] < 0 ? -1 : 1) * TAU / p;                 // rad/秒
 }
 function axialTilt(id){ return ROT[id] ? ROT[id][1]*Math.PI/180 : 0; }
+/* 自転軸と赤道を見せる（2026-09-23 タイタン指示「地軸の傾きを表現して」）。
+   惑星グループの子として足すので、軸の傾きはグループから自動で継承される。
+   軸は極から極へ抜ける細い棒、赤道は輪。天王星なら棒が横倒しに見える。 */
+function addAxisGuide(grp, radius){
+  const col = 0x7fe3ff;
+  const mat = new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.42,
+    depthWrite:false, fog:false });
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(radius*0.008, radius*0.008, radius*2.72, 6), mat);
+  grp.add(rod);
+  for(const sy of [1,-1]){                       // 極の印。北だけ円錐を上向きに
+    const c = new THREE.Mesh(new THREE.ConeGeometry(radius*0.045, radius*0.12, 8), mat);
+    c.position.y = sy*radius*1.36; if(sy<0) c.rotation.x = Math.PI;
+    grp.add(c);
+  }
+  const eq = new THREE.Mesh(new THREE.TorusGeometry(radius*1.035, radius*0.006, 4, 72),
+    new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.30,
+      depthWrite:false, fog:false }));
+  eq.rotation.x = Math.PI/2; grp.add(eq);
+}
+
 /* 自転を1歩進める。グループに軸の傾きを持たせ、球だけをそのローカルYで回す。
    グループ側を回すと傾きと自転が混ざるので、回してよいのは球（userData.globe）だけ。 */
 function spinPlanet(grp, dt, mul){
@@ -2905,6 +2926,7 @@ function enterOrbit(b){
   const sunDir = new THREE.Vector3(-1,0.32,-0.55).normalize().multiplyScalar(b.rad*46);
   addSun(sunDir, b.id==='sun'?0.85:1.15, b.id==='sun'?0:b.rad*10, 0xfff0cf);
   G.planet = makePlanet(b, b.rad); scene.add(G.planet);
+  if(b.id !== 'sun') addAxisGuide(G.planet, b.rad);   // 自転軸と赤道（太陽は輪郭が曖昧なので出さない）
   // 衛星
   /* 衛星。軌道半径 orbitR と大きさ size は「実際の順序を保ったまま」画面用に詰めた値。
      実比のままだとカリストは木星半径の26倍で、周回できる範囲(R*9)の外へ出る。 */
@@ -4436,6 +4458,15 @@ function renderDetail(){
              : b.type==='star' ? '安全距離からの観測のみ'
              : b.type==='port' ? '宇宙港を探索 ＋ 軌道から地球を撮る'
              : (b.rover? '探査車で走行 ＋ 発見':'低重力で歩行 ＋ 発見');
+  // 自転の数字。画面上の回転は圧縮してあるので、正しい値はここで必ず見せる
+  const rt = ROT[b.id];
+  $('dSpin').textContent = rt
+    ? ('自転 ' + (Math.abs(rt[0]) >= 48 ? (Math.abs(rt[0])/24).toFixed(1)+' 日'
+                                        : Math.abs(rt[0]).toFixed(1)+' 時間')
+       + (rt[0] < 0 ? '（逆行）' : '')
+       + ' ／ 軸の傾き ' + rt[1].toFixed(1) + '°'
+       + (rt[1] > 90 ? '（ほぼ倒れている）' : ''))
+    : '';
   const nh = nextHullHint();
   $('dStats').textContent = unlocked
     ? play+' ／ 記録 '+s.got+' / '+s.total+' ／ 回収素材 '+ship.count
