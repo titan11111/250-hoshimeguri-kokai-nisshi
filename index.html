@@ -223,6 +223,12 @@
   #topRight{position:absolute;top:calc(15px + env(safe-area-inset-top,0px));right:15px;display:flex;gap:8px;pointer-events:auto}
   #tgtLabel{position:absolute;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--amber);
     transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 8px #000}
+  /* 空に向けた撮影の誘導（画面内なら的、画面外なら方向） */
+  #skyLabel{position:absolute;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--amber);
+    transform:translate(-50%,-50%);white-space:nowrap;text-shadow:0 0 8px #000;
+    background:rgba(6,8,18,.5);border:1px solid rgba(226,164,74,.5);padding:3px 8px;
+    animation:skyPulse 1.6s ease-in-out infinite}
+  @keyframes skyPulse{0%,100%{opacity:.62}50%{opacity:1}}
 
   /* ── 着陸シーケンス ────────────────────── */
   #descend{justify-content:flex-end;align-items:center;pointer-events:none;text-align:center}
@@ -463,6 +469,7 @@
       <circle cx="39" cy="39" r="1.6" fill="rgba(232,163,61,.9)" stroke="none"/>
     </svg>
     <div id="tgtLabel" hidden></div>
+    <div id="skyLabel" hidden></div>
     <div id="action"></div>
     <div id="hint"></div>
   </div>
@@ -2151,15 +2158,48 @@ function capture(info){
     checkSkyShot();
   }catch(e){ toast('撮影','失敗','この端末では写真を保存できない',true); }
 }
+/* 空の的が、いま画面のどこに写っているか（NDC）。写っていなければ null */
+function skyAimNdc(){
+  if(MODE!=="surface" || !G.skyAim) return null;
+  const v = G.skyAim.position.clone().project(camera);
+  return (v.z < 1) ? v : null;
+}
+/* 判定を「カメラの向き」から「画面に写っているか」へ変更（2026-09-23）。
+   地表は三人称カメラで常に主人公を見下ろすため、視線ベクトルは上を向かない。
+   旧判定 dir.angleTo(to) < 0.34 は実測でエウロパ 0.155 / タイタン 0.22 と
+   通りはするが、成立するのは「視点を下げ切った特定の方角」だけで事実上見つからなかった。 */
 function checkSkyShot(){
-  if(MODE!=="surface" || !G.skyShot || !G.skyAim) return;
-  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-  const to = G.skyAim.position.clone().sub(camera.position).normalize();
-  if(dir.angleTo(to) < 0.34){
-    const r = G.skyShot;
-    if(mark(r.key)){ toast('観測', r.n, r.t, false); materialToast(r.key); Audio2.chord([523,698,880]); updMapPct(); checkComplete(); }
+  if(MODE!=="surface" || !G.skyShot) return;
+  const v = skyAimNdc();
+  if(!v || Math.abs(v.x) > 0.92 || Math.abs(v.y) > 0.92) return;
+  const r = G.skyShot;
+  if(mark(r.key)){
+    G.skyShot = null; hideSkyLabel();
+    toast('観測', r.n, r.t, false); materialToast(r.key); Audio2.chord([523,698,880]);
+    updMapPct(); checkComplete();
   }
 }
+/* 空の的の居場所を出す。画面内なら的の上、画面外なら縁に矢印で方向を示す */
+function showSkyLabel(name){
+  const el = $('skyLabel'), host = $('game');
+  const v = skyAimNdc();
+  if(!v){ el.hidden = true; return; }
+  const inFrame = Math.abs(v.x) <= 0.92 && Math.abs(v.y) <= 0.92;
+  el.hidden = false;
+  if(inFrame){
+    el.textContent = '◎ ' + name + ' ── いま撮れる';
+    el.style.left = ((v.x*0.5+0.5)*host.clientWidth)+'px';
+    el.style.top  = ((-v.y*0.5+0.5)*host.clientHeight - 30)+'px';
+  }else{
+    const k = 0.82/Math.max(Math.abs(v.x), Math.abs(v.y));
+    const cx = v.x*k, cy = v.y*k;
+    const arrow = Math.abs(cx) > Math.abs(cy) ? (cx>0?'▶':'◀') : (cy>0?'▲':'▼');
+    el.textContent = arrow + ' ' + name + ' はこの方向';
+    el.style.left = ((cx*0.5+0.5)*host.clientWidth)+'px';
+    el.style.top  = ((-cy*0.5+0.5)*host.clientHeight)+'px';
+  }
+}
+function hideSkyLabel(){ $('skyLabel').hidden = true; }
 function checkComplete(){
   const b = CUR; if(!b) return;
   const s = bodyScore(b);
@@ -2174,6 +2214,9 @@ function checkComplete(){
    =========================================================== */
 const GRAV = { earth:21, moon:3.5, mercury:8, venus:19, mars:8, europa:2.6, titan:2.9, miranda:1.3, triton:1.7 };
 const SKY_ONLY = { 'europa:jrise':1, 'titan:ring':1 };
+/* 視点を上へ振り切ったときの仰角(rad)。空の親星は仰角 0.34（木星）〜0.40（土星）に
+   置いてあるので、少し上の 0.50 を向けば的が画面の中ほどに入る */
+const SKY_AIM = 0.50;
 const SKYSHOT = {
   moon:{ from:'moon', k:'rise', aim:'parent' }, mercury:{ from:'mercury', k:'big', aim:'sun' },
   mars:{ from:'mars', k:'dusk', aim:'sun' },
@@ -2424,7 +2467,10 @@ function buildSurface(obj, isSat){
     const e = pool.filter(o=>o.k===ss.k)[0];
     if(e && !has(ss.from+':'+e.k)) G.skyShot = { key:ss.from+':'+e.k, n:e.n, t:e.t };
     G.skyAim = (ss.aim==='sun') ? { position: sunDir } : G.skyBody;
+    // 誘導ラベルには「空に何が見えているか」を出す（記録名だと何を狙うか分からない）
+    G.skyShotAim = (ss.aim==='sun') ? '太陽' : ((BY_ID[obj.moonSky]||{}).name || e && e.n);
   }
+  hideSkyLabel();
 
   // 主人公
   G.rover = !!obj.rover && !isSat;
@@ -2610,7 +2656,20 @@ function updSurface(dt){
   const cy = pl.y + 2.2 + dist*Math.sin(pitch)+0.8;
   const ground = heightAt(cx,cz)+1.2;
   camera.position.lerp(new THREE.Vector3(cx, Math.max(cy,ground), cz), clamp(dt*7,0,1));
-  camera.lookAt(pl.x, pl.y+1.7, pl.z);
+  // 視点を上げ切ったときだけ、注視点を空へ持ち上げる（2026-09-23）。
+  // 三人称カメラは常に主人公を見るので、そのままでは「上を向く」＝カメラが上がって
+  // むしろ見下ろす動きになり、空の的をいつまでも画面に入れられなかった。
+  // pitch 0.55 以下は従来どおり（地上の操作感を一切変えない）。
+  // 持ち上げ量はズーム距離ではなく「仰角 SKY_AIM rad」で決める。距離比例にすると
+  // 遠ズームで空の的を飛び越して上を向きすぎる（実測: 的が画面外 ndc 1.74）。
+  const skyLift = clamp((pitch-0.55)/0.40, 0, 1);
+  let lookY = pl.y + 1.7;
+  if(skyLift > 0){
+    const dh = Math.max(1.2, Math.hypot(camera.position.x-pl.x, camera.position.z-pl.z));
+    const skyY = camera.position.y + Math.tan(SKY_AIM)*dh;   // 仰角 SKY_AIM を向く注視点
+    lookY = lerp(lookY, skyY, skyLift*skyLift);
+  }
+  camera.lookAt(pl.x, lookY, pl.z);
   // 発見判定
   let near=null, nd=1e9;
   for(const m of G.finds){
@@ -2623,6 +2682,8 @@ function updSurface(dt){
   if(near && nd<26) showLabel(near.userData.ground.clone().setY(near.userData.ground.y+7),
     (near.userData.done?'記録済 ':'') + near.userData.rec.n + (G.nearFind? ' ［E］':''));
   else hideLabel();
+  // 空にしか無い記録（木星の出・見上げた環）の居場所を常に出す
+  if(G.skyShot && G.skyAim) showSkyLabel(G.skyShotAim || G.skyShot.n); else hideSkyLabel();
   // HUD
   const o = G.obj, all = (o.finds||[]).length, got = (o.finds||[]).filter(f=>has(o.id+':'+f.k)).length;
   hud({ t:'SURFACE ─ 地表', l1:'天体', v1:o.name,
@@ -2636,7 +2697,8 @@ function updSurface(dt){
   setHint((usePadHint()
     ? '<b>十字</b> 前後・旋回 ・ <b>A</b> '+(G.nearFind?'記録':'ジャンプ')+' ・ <b>B</b> 撮影 ・ <b>SELECT</b> 船へ帰還'
     : '<b>WASD</b> 移動 ・ <b>SPACE</b> ジャンプ ・ <b>ドラッグ</b> 視点 ・ <b>E</b> 記録 ・ <b>P</b> 撮影')
-    + (G.skyShot? ' ── <b style="color:var(--amber)">空に見えるものを撮ってみる</b>':''));
+    + (G.skyShot? ' ── <b style="color:var(--amber)">視点を上へ振り切り、空の'
+        +(G.skyShotAim||'的')+'を画面に入れて撮影</b>':''));
   setControllerLabels(G.nearFind?'記録':'跳ぶ', '撮影', '帰還');
 }
 /* ===========================================================
@@ -2750,6 +2812,7 @@ function updMapPct(){
 function hudMode(m){
   $('hud').hidden = false; $('title').hidden = true; $('map').hidden = true;
   $('reticle').style.display = (m==='surface')? 'none':'block';
+  if(m!=='surface') hideSkyLabel();
 }
 let hintCache='';
 function setHint(html){ if(html===hintCache) return; hintCache=html; $('hint').innerHTML=html; }
