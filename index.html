@@ -4593,22 +4593,37 @@ function updSurface(dt){
        「パタパタ」になっていた。歩行は左脚と右腕が対になる（対側性）。
        振り幅は速度で、角速度は速度の平方根で伸ばす（歩幅が先に伸びる）。 */
     const ga = G.player.userData.gait;
-    const sp = clamp(moving*0.115, 0, 0.66);          // 振り幅(rad)。最大およそ38°
-    const w  = 3.1 + Math.sqrt(Math.max(moving,0))*1.35;
+    /* 重力の強さ（地球=1.0／火星0.38／月0.17／エウロパ0.12）。
+       低重力ほど、加圧服の宇宙飛行士は脚を伸ばしたまま大きく浮く歩き方になる。
+       服の内圧が膝を伸ばす方向へ押し返すので、そもそも深く曲げられない。 */
+    const gN = clamp((G.grav||9)/21, 0.12, 1.1);
+    const sp = clamp(moving*0.115, 0, 0.66);          // 腿の振り幅(rad)。最大およそ38°
+    const w  = (3.1 + Math.sqrt(Math.max(moving,0))*1.35) * (0.66 + 0.34*gN);
     ga.base += dt*w;
-    const ph = Math.sin(ga.base) * sp;
+    const u = ga.base, ph = Math.sin(u) * sp;
+    /* 膝の最大屈曲。地球で腿の振りの約1.7倍（＝最大64°）、月で0.74倍（28°）。
+       アポロ映像の歩きが棒のように見えるのは、低重力そのものより加圧服の抵抗による */
+    const kneeMax = sp * (0.55 + 1.15*gN);
     for(let i=0;i<2;i++){
       const d = i ? -1 : 1;                            // 左右で逆位相
       ga.legs[i].rotation.x =  ph*d;
       ga.arms[i].rotation.x = -ph*d*0.66;              // 腕は同じ側の脚と逆＝反対の脚と同じ
-      // ひざは脚を後ろへ送る側でだけ曲がる（前へ出す脚は伸びている）
-      ga.knees[i].rotation.x = -Math.max(0, -Math.sin(ga.base)*d) * sp*1.25;
-      // ひじは常に少し曲げ、振りに合わせて深くする
-      ga.elbows[i].rotation.x = -0.18 - Math.max(0, Math.sin(ga.base)*d) * sp*0.75;
+      /* 膝は「遊脚が体の真下を前へ通り抜ける瞬間」に最も深く曲がる。そこは腿の角度が0で、
+         かつ前へ動いている位相＝ -cos(u)*d が最大になる点。踵を尻へ引き上げる動きなので
+         符号は必ず正（+X回転）。負にするとすねが前へ跳ね上がって逆関節になる
+         （2026-09-23 実測: 腿 -0.636 のとき膝 -0.794・すね先端が前へ +0.443 まで出ていた）。 */
+      ga.knees[i].rotation.x = Math.max(0, -Math.cos(u)*d) * kneeMax;
+      // ひじは膝と逆で、前腕を前へ上げる＝負が屈曲
+      ga.elbows[i].rotation.x = -0.18 - Math.max(0, Math.sin(u)*d) * sp*0.75;
     }
-    // 胴は1歩に2回わずかに沈み、肩は腰と逆にひねる
-    ga.body.position.y = -Math.abs(Math.cos(ga.base)) * sp*0.10;
+    /* 上下動。脚が揃う瞬間（|cos|=1）は左右の脚が真下に伸びて背が高くなり、
+       開き切った瞬間（|cos|=0）は低くなる。旧版は符号が逆で、揃ったときに沈んでいた。
+       低重力ほど浮きを大きくして、1歩ごとに跳ねる低重力歩行に寄せる。 */
+    const floatAmt = 1.0 + (1.0 - gN)*0.9;
+    ga.body.position.y = (Math.abs(Math.cos(u)) - 0.5) * sp*0.15*floatAmt;
     ga.body.rotation.y = ph*0.16;
+    // 背嚢が重いぶん前傾する。低重力ほど深い（重心が後ろへ逃げるのを押さえる姿勢）
+    ga.body.rotation.x = -clamp(moving*0.013, 0, 0.11) * (1.35 - gN*0.35);
   }
   if(G.contactShadow){
     const sh=contactHeight(pl.x,pl.z,climb);
