@@ -2108,6 +2108,39 @@ function sunMaterial(map){
   });
 }
 
+/* ── 自転（2026-09-23 タイタン指示）──────────────────────────
+   [自転周期(時間), 自転軸の傾き(度)]。周期のマイナスは逆行（金星・天王星・トリトン）。
+   衛星はすべて潮汐固定なので公転周期＝自転周期をそのまま入れている。 */
+const ROT = {
+  sun:[609.12, 7.25],   mercury:[1407.6, 0.03], venus:[-5832.5, 177.36],
+  earth:[23.934, 23.44], moon:[655.72, 6.68],   mars:[24.623, 25.19],
+  jupiter:[9.925, 3.13], saturn:[10.656, 26.73], uranus:[-17.24, 97.77],
+  neptune:[16.11, 28.32],
+  io:[42.46, 0], europa:[85.22, 0], ganymede:[171.71, 0], callisto:[400.54, 0],
+  titan:[382.68, 0], miranda:[33.92, 0], triton:[-141.04, 156.9], phobos:[7.65, 0]
+};
+/* 画面上の速さ。実時間どおりだと最速の木星でも1周10時間かかって誰も気づけない。
+   比は保ったまま極端さだけ縮めるため、周期を 0.5 乗してから引き伸ばす。
+   基準＝木星が1周36秒。結果（1周の秒数）:
+     木星36 / 土星37 / 海王星46 / 天王星48(逆) / 地球56 / 火星57 / ミランダ67
+     イオ75 / エウロパ106 / トリトン136(逆) / ガニメデ150 / タイタン224 / カリスト229
+     太陽282 / 月293 / 水星429 / 金星873(逆)
+   「金星はほとんど回らず、しかも逆」「木星は見ていて分かるほど速い」という事実は残る。
+   正確な周期は星図の天体データに数字で出すので、圧縮しても嘘にはならない。 */
+const ROT_REF = 36, ROT_EXP = 0.5;
+function spinRate(id){
+  const r = ROT[id]; if(!r) return 0.03;
+  const p = ROT_REF * Math.pow(Math.abs(r[0])/9.925, ROT_EXP);
+  return (r[0] < 0 ? -1 : 1) * TAU / p;                 // rad/秒
+}
+function axialTilt(id){ return ROT[id] ? ROT[id][1]*Math.PI/180 : 0; }
+/* 自転を1歩進める。グループに軸の傾きを持たせ、球だけをそのローカルYで回す。
+   グループ側を回すと傾きと自転が混ざるので、回してよいのは球（userData.globe）だけ。 */
+function spinPlanet(grp, dt, mul){
+  if(!grp || !grp.userData || !grp.userData.globe) return;
+  grp.userData.globe.rotation.y += (grp.userData.spin || 0.03) * dt * (mul || 1);
+}
+
 function makePlanet(b, radius){
   const grp = new THREE.Group();
   const seed = (b.id.charCodeAt(0)+b.id.length*7)%9;
@@ -2135,8 +2168,11 @@ function makePlanet(b, radius){
       atmoMaterial(air.c, air.p, air.s));
     grp.add(atm); grp.userData.atmo = atm;
   }
-  if(b.rings){ const r = makeRings(radius*1.35, radius*2.32, b.color); grp.add(r); r.rotation.z = 0.12;
-    if(b.id==='uranus'){ r.rotation.x = 0.1; r.rotation.z = 1.5; } grp.userData.ring=r; }
+  // 環は赤道面にある。惑星ごと傾ければ環も一緒に傾くので、個別の手当ては要らない
+  // （天王星の環が縦に立つのも、97.77度の軸の傾きから自動で出る）
+  if(b.rings){ const r = makeRings(radius*1.35, radius*2.32, b.color); grp.add(r); grp.userData.ring=r; }
+  grp.rotation.z = axialTilt(b.id);      // 自転軸の傾き
+  grp.userData.spin = spinRate(b.id);    // rad/秒（マイナスは逆行）
   return grp;
 }
 
@@ -2151,8 +2187,7 @@ function buildAttract(){
   Audio2.ambience(58, 0.055);
 }
 function updAttract(dt){
-  if(G.globe) G.globe.rotation.y += dt*0.028;
-  if(G.moon2) G.moon2.rotation.y += dt*0.01;
+  spinPlanet(G.globe, dt); spinPlanet(G.moon2, dt);
   camera.position.x = Math.sin(T*0.06)*9;
   camera.position.y = Math.cos(T*0.043)*5;
   camera.lookAt(30 + Math.sin(T*0.05)*24, -8, -260);
@@ -2231,7 +2266,7 @@ function updCruise(dt){
     const qt = new THREE.Quaternion().setFromRotationMatrix(m);
     G.q.slerp(qt, clamp(dt*(G.auto?0.9:0.2),0,1));
   }
-  G.target.userData.globe.rotation.y += dt*0.04;
+  spinPlanet(G.target, dt);
   if(G.dust){
     const pos = G.dust.geometry.attributes.position;
     G.dust.position.copy(G.ship.position); G.dust.quaternion.copy(G.ship.quaternion);
@@ -2342,11 +2377,11 @@ function updOrbit(dt){
   }
   if(d > R*9){ G.ship.position.normalize().multiplyScalar(R*9);
     if(!G.far || T-G.far>4){ G.far=T; toast('航法','圏外に出そう','船を惑星の方へ向けて',true);} }
-  G.planet.userData.globe.rotation.y += dt*(b.tex==='band'?0.07:0.03);
+  spinPlanet(G.planet, dt);
   if(G.sat){
     G.satAng += dt*0.035;
     G.sat.position.copy(spherePos(R*3.1, 0.18, G.satAng));
-    G.sat.rotation.y += dt*0.02;
+    spinPlanet(G.sat, dt);
   }
   // 自転する地物（大暗斑）に貼り付いた目標は、毎フレーム位置を作り直す。
   // 惑星の裏へ回っているあいだは惑星に隠れるので、斑が正面へ来るのを待つことになる
