@@ -887,6 +887,24 @@ const Audio2 = {
     this.rainGain.gain.value = this.on ? vol : 0;
   },
   rainOff(){ if(this.rainGain) this.rainGain.gain.value = 0; },
+  /* 割れた氷を踏む「パリパリ」。細かいクリックを数発、高い帯域で散らす。
+     1発の長いノイズだと「ザッ」になって割れる音にならない（2026-09-23 カリスト）。 */
+  crackle(vol){
+    if(!this.ctx||!this.on) return;
+    const t0 = this.ctx.currentTime, v = vol || 0.085, sr = this.ctx.sampleRate;
+    const n = 4 + ((Math.random()*5)|0);
+    for(let i=0;i<n;i++){
+      const at = t0 + Math.random()*0.17;
+      const ns = Math.max(1, Math.floor(sr*(0.005 + Math.random()*0.014)));
+      const buf = this.ctx.createBuffer(1, ns, sr), d = buf.getChannelData(0);
+      for(let j=0;j<ns;j++) d[j] = (Math.random()*2-1)*Math.pow(1-j/ns, 2.2);
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const f = this.ctx.createBiquadFilter(); f.type='highpass';
+      f.frequency.value = 2200 + Math.random()*2800;
+      const g = this.ctx.createGain(); g.gain.value = v*(0.45+Math.random()*0.95);
+      src.connect(f); f.connect(g); g.connect(this.master); src.start(at);
+    }
+  },
   noise(dur, vol){
     if(!this.ctx||!this.on) return;
     const n = Math.floor(this.ctx.sampleRate*dur), buf = this.ctx.createBuffer(1,n,this.ctx.sampleRate), d = buf.getChannelData(0);
@@ -946,7 +964,7 @@ const Audio2 = {
    ・ミュートは Audio2.on に追従（キー tg.250.mute を共有）
    ・ポーズ・バックグラウンドで止め、復帰で戻す */
 const BGM = {
-  vol:0.34, cur:null, primed:false, slot:0, el:[],
+  vol:0.34, cur:null, primed:false, slot:0, el:[], pending:false,
   // 無音1サンプルのWAV。iOS の解錠は「要素ごと」なので、先にこれで play() を通し、
   // 実ファイルは鳴らす直前に差し替える。4曲を一度に落とすと初回タップで 5.7MB 走る。
   SILENT:'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==',   // 8kHz/8bit/0.1秒。長さ0のWAVは WebKit が error を出して解錠できない
@@ -972,6 +990,11 @@ const BGM = {
     }
     const c = this.cur; this.cur = null; if(c) this.play(c);   // 起動時に選ばれていた曲を鳴らし直す
   },
+  /* 2026-09-23 修正: ポーズ中の切替で無音になっていた。
+     旧コードは PAUSED のとき slot だけ進めて return しており、新しい slot の要素に
+     src も fade も入らなかった。ポーズを解除しても volume 0 のまま再生される
+     （実測: 解除後 src=正しい曲 / paused=false / vol=0 ＝ 無音）。
+     いまは src の差し替えまでは必ず行い、鳴らす操作だけ resume() へ預ける。 */
   play(k){
     if(!this.src[k] || this.cur === k) return;
     const prev = this.primed ? this.el[this.slot] : null;
@@ -980,10 +1003,11 @@ const BGM = {
     const next = this.make(1 - this.slot);
     this.slot = 1 - this.slot;
     if(prev) this.fade(prev, 0, 0.8, true);
-    if(PAUSED) return;
     next.pause(); next.volume = 0; next._dead = false;
     next.preload = 'auto'; next.src = this.src[k];
     try{ next.load(); }catch(e){}
+    if(PAUSED){ this.pending = true; return; }     // 解除時に resume() が鳴らす
+    this.pending = false;
     try{ const p = next.play(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
     this.fade(next, this.vol, 1.2, false);
   },
@@ -1002,8 +1026,11 @@ const BGM = {
   suspend(){ this.el.forEach(a=>{ if(!a.paused) a.pause(); }); },
   resume(){
     const a = this.active();
-    if(a && a.src && a.src.indexOf('data:')!==0 && a.paused){
-      try{ const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
+    if(!a || !a.src || a.src.indexOf('data:')===0) return;
+    if(a.paused){ try{ const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} }
+    // ポーズ中に曲が変わっていたら、ここでフェードインまでやる（やらないと無音のまま）
+    if(this.pending || a.volume < this.vol - 0.01){
+      this.pending = false; this.fade(a, this.vol, 1.2, false);
     }
   }
 };
@@ -2159,6 +2186,10 @@ function setCam(near, far){
   camera.near = near; camera.far = far; camera.updateProjectionMatrix();
 }
 function newScene(fogCol, near, far){
+  /* 場面が変わったら連続音は必ず切る。2026-09-23 実測で、タイタンの雨のまま
+     軌道へ戻ると rainGain 0.079 が鳴りっぱなしだった（地表の更新が止まるので
+     updWeatherFx が 0 を書きに来ない）。止める責任は場面の切り替え側にある。 */
+  Audio2.rainOff();
   scene = new THREE.Scene();
   G = { rear:false };
   const stack = $('star-stack');
@@ -3191,6 +3222,10 @@ const WX_KIND = {
 };
 /* どの地表にどの天候が出るか */
 const WX = { rocky:['dust','snow'], dune:['drizzle'], port:['erain'] };
+/* 足音。地表ごとに音色を変える。every は「この距離を歩くごとに1歩」(m) */
+const STEP = {
+  cratered:{ every:1.8, play(){ Audio2.crackle(0.085); } }   // カリスト＝割れた氷のパリパリ
+};
 /* 粒を四角い点のままにすると「板が浮いている」ようにしか見えない。
    放射グラデーションの丸を1枚作って全部で共有する（2026-09-23 実測で差し替え）。 */
 let SOFT_DOT = null;
@@ -3358,7 +3393,6 @@ function buildSurface(obj, isSat){
   BGM.play('surface');
   G.jumpNoted = 0; G.rocks = []; G.geysers = []; G.weather = null; G.haze = null;
   G.wx = null; G.olympus = null; G.skyMesh = null; G.lakes = [];
-  Audio2.rainOff();
   G.shake = G.shake || new THREE.Vector3(); G.shake.set(0,0,0);
   G.skyGaze = false; G.skyReturn = false;
 
@@ -3711,6 +3745,12 @@ function updSurface(dt){
   const ground = meshHeightAt(cx,cz)+1.2;
   camera.position.lerp(new THREE.Vector3(cx, Math.max(cy,ground), cz), clamp(dt*7,0,1));
   // 環境演出（噴出・雷・地鳴り・熱霞）。揺れはカメラへ最後に足す
+  // 足音（歩いた距離で刻む。フレーム数で刻むとダッシュ中に鳴りっぱなしになる）
+  const stp = !G.rover && G.obj && STEP[G.obj.surf];
+  if(stp && pl.ground){
+    G.stepAcc = (G.stepAcc||0) + Math.hypot(pl.vx, pl.vz)*dt;
+    if(G.stepAcc > stp.every){ G.stepAcc = 0; stp.play(); }
+  } else G.stepAcc = 0;
   updGeysers(dt); updHaze(dt); updWeatherFx(dt);
   if(G.shake) G.shake.set(0,0,0);
   updWeather(dt);
