@@ -725,7 +725,14 @@ const BODIES = [
 ];
 
 const BY_ID = {};
-BODIES.forEach(b => { BY_ID[b.id] = b; if (b.sat) BY_ID[b.sat.id] = b.sat; });
+/* 衛星は複数持てる（2026-09-23 ガリレオ衛星4体・エンケラドス追加）。
+   既存の定義は sat（単数）のままなので、ここで sats（配列）へ正規化して
+   以降のコードは sats だけを見る。sat は後方互換のため sats[0] を指す。 */
+BODIES.forEach(b => {
+  if (b.sat && !b.sats) b.sats = [b.sat];
+  if (b.sats) b.sat = b.sats[0];
+});
+BODIES.forEach(b => { BY_ID[b.id] = b; (b.sats||[]).forEach(s => { BY_ID[s.id] = s; }); });
 
 /* 到達順の目安（星図の並び＝太陽からの距離順） */
 const ROUTE = ['sun','mercury','venus','earth','moon','mars','jupiter','saturn','uranus','neptune'];
@@ -735,7 +742,7 @@ function totalSlots(b){
   let n = 1; // 到達
   if (b.obs) n += b.obs.length;
   if (b.finds) n += b.finds.length;
-  if (b.sat)  n += b.sat.finds.length + 1; // 衛星着陸
+  (b.sats||[]).forEach(s => { n += s.finds.length + 1; });   // 衛星ごとに着陸＋発見
   if (b.surf) n += 1; // 着陸
   return n;
 }
@@ -2202,8 +2209,11 @@ function startCruise(bodyId){
   addSun(new THREE.Vector3(-4000,1200,-2000), b.id==='sun'?2.0:1.15, b.id==='sun'?0:2600, 0xfff0cf);
   const rad = b.rad;
   G.target = makePlanet(b, rad); G.target.position.set(0,0,-b.cruise); scene.add(G.target);
-  if(b.sat){ G.satPrev = makePlanet({id:b.sat.id,tex:'ice',color:0xdfe9f0}, rad*0.17);
-    G.satPrev.position.set(rad*2.4, rad*0.3, -b.cruise+rad*1.4); scene.add(G.satPrev); }
+  (b.sats||[]).forEach((sa,i)=>{
+    const pv = makePlanet({id:sa.id, tex:'ice', color:sa.orbColor||0xdfe9f0}, rad*(sa.size||0.17)*0.9);
+    pv.position.set(rad*(2.1+i*0.5), rad*(0.3-i*0.16), -b.cruise+rad*(1.4-i*0.25));
+    scene.add(pv); if(!i) G.satPrev = pv;
+  });
   // 出発地
   const from = makePlanet(BY_ID.earth, 130); from.position.set(-40,-30,420); scene.add(from); G.from=from;
   G.ship = buildShip(); scene.add(G.ship);
@@ -2331,11 +2341,20 @@ function enterOrbit(b){
   addSun(sunDir, b.id==='sun'?0.85:1.15, b.id==='sun'?0:b.rad*10, 0xfff0cf);
   G.planet = makePlanet(b, b.rad); scene.add(G.planet);
   // 衛星
-  if(b.sat){
-    const sb = { id:b.sat.id, tex:b.sat.surf==='dune'?'cloud':'rock', color:b.sat.surf==='dune'?0xc98a45:0xdae6ef };
-    G.sat = makePlanet(sb, b.rad*0.15);
-    G.satAng = 0.7; scene.add(G.sat);
-  }
+  /* 衛星。軌道半径 orbitR と大きさ size は「実際の順序を保ったまま」画面用に詰めた値。
+     実比のままだとカリストは木星半径の26倍で、周回できる範囲(R*9)の外へ出る。 */
+  G.sats = [];
+  (b.sats||[]).forEach((sa,i)=>{
+    const sb = { id:sa.id, tex:sa.orbTex||'rock', color:sa.orbColor||0xdae6ef };
+    const m = makePlanet(sb, b.rad*(sa.size||0.15));
+    m.userData.sat = sa;
+    m.userData.orbitR = sa.orbitR || 3.1;
+    m.userData.ang = 0.7 + i*1.9;
+    m.userData.spd = 0.035 * Math.pow(3.1/(sa.orbitR||3.1), 1.5);   // 内側ほど速い（ケプラー）
+    m.userData.lat = 0.18 - i*0.06;
+    scene.add(m); G.sats.push(m);
+  });
+  G.sat = G.sats[0] || null;
   // 観測目標
   G.marks = [];
   const obs = b.obs||[];
@@ -2362,7 +2381,9 @@ function enterOrbit(b){
     toast('到達', b.name+'圏に入る', b.mission, false);
     Audio2.chord([392,523,659]);
   } else {
-    toast('周回軌道', b.name, b.sat? b.sat.name+'に降りられる' : (b.surf? '降下できる':'観測のみ'), true);
+    toast('周回軌道', b.name,
+          (b.sats&&b.sats.length)? b.sats.map(s=>s.name).join('・')+'に降りられる'
+                                 : (b.surf? '降下できる':'観測のみ'), true);
   }
   updMapPct();
 }
@@ -2378,10 +2399,10 @@ function updOrbit(dt){
   if(d > R*9){ G.ship.position.normalize().multiplyScalar(R*9);
     if(!G.far || T-G.far>4){ G.far=T; toast('航法','圏外に出そう','船を惑星の方へ向けて',true);} }
   spinPlanet(G.planet, dt);
-  if(G.sat){
-    G.satAng += dt*0.035;
-    G.sat.position.copy(spherePos(R*3.1, 0.18, G.satAng));
-    spinPlanet(G.sat, dt);
+  for(const m of (G.sats||[])){
+    m.userData.ang += dt*m.userData.spd;
+    m.position.copy(spherePos(R*m.userData.orbitR, m.userData.lat, m.userData.ang));
+    spinPlanet(m, dt);
   }
   // 自転する地物（大暗斑）に貼り付いた目標は、毎フレーム位置を作り直す。
   // 惑星の裏へ回っているあいだは惑星に隠れるので、斑が正面へ来るのを待つことになる
@@ -2402,8 +2423,13 @@ function updOrbit(dt){
   G.near = (near && nd < R*0.5 && !near.userData.done) ? near : null;
   // 着陸判定
   let landable = null;
-  if(G.sat){ const ds = G.sat.position.distanceTo(G.ship.position);
-    if(ds < R*0.62) landable = {kind:'sat', name:b.sat.name}; }
+  let nearSat=null, nsd=1e9;
+  for(const m of (G.sats||[])){
+    const ds = m.position.distanceTo(G.ship.position);
+    if(ds < nsd){ nsd=ds; nearSat=m; }
+  }
+  G.nearSat = nearSat;
+  if(nearSat && nsd < R*0.62) landable = {kind:'sat', name:nearSat.userData.sat.name, sat:nearSat.userData.sat};
   else if(b.surf && d < R*1.55) landable = {kind:'surf', name:b.name};
   G.landable = landable;
 
@@ -2422,7 +2448,8 @@ function updOrbit(dt){
   setActions(acts);
   // 目標ラベル
   if(near && nd < R*2.6) showLabel(near.position, (near.userData.done?'記録済 ':'観測目標 ')+near.userData.rec.n);
-  else if(G.sat && G.sat.position.distanceTo(G.ship.position)<R*2.2) showLabel(G.sat.position, b.sat.name);
+  else if(G.nearSat && G.nearSat.position.distanceTo(G.ship.position)<R*2.2)
+    showLabel(G.nearSat.position, G.nearSat.userData.sat.name);
   else hideLabel();
   setHint(usePadHint()
     ? '<b>十字</b> 機首/旋回 ・ <b>A</b> '+(landable?'着陸':'観測')+' ・ <b>B</b> 撮影 ・ <b>SELECT</b> 星図'
@@ -2480,12 +2507,12 @@ function act(kind){
   }
   if(kind==='shoot'){
     if(MODE==='cruise'||MODE==='orbit'||MODE==='surface'){
-      pendingShot = { body: CURSAT? (CUR.sat?CUR.sat.name:CUR.name) : CUR.name };
+      pendingShot = { body: CURSAT? ((G.obj&&G.obj.name)||CUR.name) : CUR.name };
     }
   }
   if(kind==='land'){
     if(MODE==='orbit' && G.landable){
-      if(G.landable.kind==='sat') startDescend(CUR.sat, true);
+      if(G.landable.kind==='sat') startDescend(G.landable.sat || CUR.sat, true);
       else startDescend(CUR, false);
     }
   }
@@ -3527,7 +3554,7 @@ function bodyScore(b){
   add(b.id+':reach');
   (b.obs||[]).forEach(o=>add(b.id+':'+o.k));
   if(b.surf){ add(b.id+':land'); (b.finds||[]).forEach(f=>add(b.id+':'+f.k)); }
-  if(b.sat){ add(b.sat.id+':land'); (b.sat.finds||[]).forEach(f=>add(b.sat.id+':'+f.k)); }
+  (b.sats||[]).forEach(sa=>{ add(sa.id+':land'); (sa.finds||[]).forEach(f=>add(sa.id+':'+f.k)); });
   return {got, total};
 }
 function totalScore(){
@@ -3552,7 +3579,7 @@ function scienceKeys(){
   BODIES.forEach(b=>{
     (b.obs||[]).forEach(o=>keys.push(b.id+':'+o.k));
     (b.finds||[]).forEach(f=>keys.push(b.id+':'+f.k));
-    if(b.sat) (b.sat.finds||[]).forEach(f=>keys.push(b.sat.id+':'+f.k));
+    (b.sats||[]).forEach(sa=>{ (sa.finds||[]).forEach(f=>keys.push(sa.id+':'+f.k)); });
   });
   return keys;
 }
@@ -3720,7 +3747,7 @@ function renderDetail(){
   $('dKana').textContent = b.kana;
   $('dName').textContent = b.name;
   $('dMission').textContent = b.mission;
-  const play = b.type==='giant' ? '周回観測 ＋ '+b.sat.name+'に着陸'
+  const play = b.type==='giant' ? '周回観測 ＋ '+(b.sats||[]).map(s=>s.name).join('・')+'に着陸'
              : b.type==='star' ? '安全距離からの観測のみ'
              : b.type==='port' ? '宇宙港を探索 ＋ 軌道から地球を撮る'
              : (b.rover? '探査車で走行 ＋ 発見':'低重力で歩行 ＋ 発見');
@@ -3766,8 +3793,8 @@ function renderLog(){
     row(b.id+':reach','到達','','未到達');
     (b.obs||[]).forEach(o=>row(b.id+':'+o.k, o.n, o.t));
     if(b.surf){ row(b.id+':land','着陸','','未着陸'); (b.finds||[]).forEach(f=>row(b.id+':'+f.k, f.n, f.t)); }
-    if(b.sat){ row(b.sat.id+':land', b.sat.name+'に着陸','','未着陸');
-      (b.sat.finds||[]).forEach(f=>row(b.sat.id+':'+f.k, f.n, f.t)); }
+    (b.sats||[]).forEach(sa=>{ row(sa.id+':land', sa.name+'に着陸','','未着陸');
+      (sa.finds||[]).forEach(f=>row(sa.id+':'+f.k, f.n, f.t)); });
     e.innerHTML = '<div class="eh"><h4>'+b.name+'</h4><div class="st">'+s.got+' / '+s.total+'</div></div><ul>'+items+'</ul>';
     host.appendChild(e);
   });
