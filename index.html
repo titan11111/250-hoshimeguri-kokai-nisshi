@@ -2167,6 +2167,7 @@ function tick(){
       else if(MODE==='orbit') updOrbit(dt);
       else if(MODE==='descend') updDescend(dt);
       else if(MODE==='surface') updSurface(dt);
+      else if(MODE==='launch') updLaunch(dt);
     }
   }
   if(scene && camera){
@@ -2413,6 +2414,337 @@ function makePlanet(b, radius){
   grp.rotation.z = axialTilt(b.id);      // 自転軸の傾き
   grp.userData.spin = spinRate(b.id);    // rad/秒（マイナスは逆行）
   return grp;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   地球 — 干上がった世界と打ち上げ（2026-09-23 タイタン指示）
+   「地球からロケットを発射するところからスタートしたい。街並み、団扇をあおぐ人類、
+     水が枯れている。普段の地球の干上がりかけた世界」
+   宇宙服は着ない（酸素がある）。MODE='launch' を新設し、待機→点火→上昇→宇宙
+   の4段で進める。終わると星図へ渡す。
+   ══════════════════════════════════════════════════════════════ */
+const LAUNCH_KEY = 'tg.250.launched';
+const CITY_AZ = -1.35;                      // 街並みの方角（発射台から見て左手）
+
+function boxM(c){ return new THREE.MeshStandardMaterial({color:c, roughness:0.93, flatShading:true}); }
+function bx(w,h,d,m){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); }
+
+/* 団扇をあおぐ人。肩を回転中心にするため腕のジオメトリを下へずらしてある */
+const CLOTH = [0x6f7f96, 0x8a6f5a, 0x93a08b, 0xa8907c, 0x7d6b84];
+function makePerson(){
+  const g = new THREE.Group();
+  const skin = boxM(0xd2a87f), cloth = boxM(CLOTH[(Math.random()*CLOTH.length)|0]);
+  const add=(m,x,y,z)=>{ m.position.set(x||0,y||0,z||0); g.add(m); return m; };
+  add(bx(0.62,1.00,0.34,cloth), 0, 1.15, 0);              // 胴
+  add(bx(0.40,0.40,0.36,skin ), 0, 1.82, 0);              // 頭
+  add(bx(0.20,0.90,0.20,cloth), -0.22, 0.45, 0);          // 脚
+  add(bx(0.20,0.90,0.20,cloth),  0.22, 0.45, 0);
+  add(bx(0.16,0.72,0.16,skin ), -0.42, 1.06, 0);          // 使っていない腕
+  const arm = bx(0.16,0.72,0.16,skin);
+  arm.geometry.translate(0,-0.36,0);                      // 肩を原点に
+  arm.position.set(0.42, 1.55, 0); g.add(arm);
+  const fan = new THREE.Mesh(new THREE.CircleGeometry(0.30,14),
+    new THREE.MeshStandardMaterial({color:0xe8dcbb, roughness:0.9, side:THREE.DoubleSide}));
+  fan.position.set(0,-0.80,0.02); arm.add(fan);
+  g.userData.fan = arm; g.userData.ph = Math.random()*TAU;
+  return g;
+}
+
+/* 干上がった街。全周に散らすと「囲まれた盆地」になるので一方向の帯に寄せる */
+function buildCity(){
+  const g = new THREE.Group();
+  const cols = [0x8a8274, 0x9a9082, 0x766f63, 0xa39a88, 0x6e675c];
+  for(let i=0;i<86;i++){
+    const a = CITY_AZ + (Math.random()-0.5)*1.5;
+    const d = 240 + Math.random()*300;
+    const h = 10 + Math.random()*Math.random()*78;
+    const w = 6 + Math.random()*13;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w*(0.7+Math.random()*0.8)),
+      rockMat(cols[(Math.random()*cols.length)|0]));
+    m.position.set(Math.cos(a)*d, h/2 - 8, Math.sin(a)*d);
+    m.rotation.y = Math.random()*0.7;
+    g.add(m);
+    if(h > 50 && Math.random()<0.5){        // 高層には尖塔
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.6,12,5), rockMat(0x5c564d));
+      t.position.set(m.position.x, h - 8 + 6, m.position.z); g.add(t);
+    }
+  }
+  // 干上がった貯水池：ひび割れた底が見えている窪地の縁
+  for(let i=0;i<5;i++){
+    const a = CITY_AZ + 1.9 + (Math.random()-0.5)*1.0, d = 120 + Math.random()*90;
+    const r = 18 + Math.random()*22;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r, r*1.18, 22),
+      new THREE.MeshStandardMaterial({color:0x6b6350, roughness:1, side:THREE.DoubleSide}));
+    ring.rotation.x = -Math.PI/2;
+    ring.position.set(Math.cos(a)*d, meshHeightAt(Math.cos(a)*d, Math.sin(a)*d)+0.12, Math.sin(a)*d);
+    g.add(ring);
+  }
+  return g;
+}
+
+function buildRocket(){
+  const g = new THREE.Group();
+  const body = metalMat(0xe4e7ec), dark = metalMat(0x39404d);
+  const red  = new THREE.MeshStandardMaterial({color:0xba3a2a, roughness:0.72, flatShading:true});
+  const add=(m,x,y,z)=>{ m.position.set(x||0,y||0,z||0); g.add(m); return m; };
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.45,26,12), body), 0,13,0);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.50,2.50,1.3,12), red ), 0,19.5,0);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,2.2,6,12),  body), 0,29,0);
+  add(new THREE.Mesh(new THREE.ConeGeometry(1.5,6.5,12),        body), 0,35.2,0);
+  for(let i=0;i<4;i++){
+    const a = i/4*TAU;
+    const f = add(new THREE.Mesh(new THREE.BoxGeometry(0.4,5.4,2.8), dark),
+                  Math.cos(a)*2.5, 2.7, Math.sin(a)*2.5);
+    f.rotation.y = -a;
+  }
+  add(new THREE.Mesh(new THREE.CylinderGeometry(1.5,2.1,2.2,12), dark), 0,-0.9,0);
+  const fl = new THREE.Mesh(new THREE.ConeGeometry(2.0, 11, 10),
+    new THREE.MeshBasicMaterial({color:0xffb245, transparent:true, opacity:0,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  fl.rotation.x = Math.PI; fl.position.set(0,-7.0,0); g.add(fl); g.userData.flame = fl;
+  const halo = glowSprite(0xffd489, 16, 0); halo.position.set(0,-4,0); g.add(halo);
+  g.userData.halo = halo;
+  return g;
+}
+
+function buildGantry(){
+  const g = new THREE.Group();
+  const m = metalMat(0x9aa2ad), d = metalMat(0x4a5464);
+  for(const sx of [-1,1]) for(const sz of [-1,1]){
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.30,34,6), m);
+    c.position.set(sx*3.0, 17, sz*3.0); g.add(c);
+  }
+  for(let y=4;y<34;y+=5){
+    const p = new THREE.Mesh(new THREE.BoxGeometry(6.6,0.30,6.6), d);
+    p.position.set(0,y,0); g.add(p);
+  }
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(6.0,0.4,1.2), d);
+  arm.position.set(4.2, 24, 0); g.add(arm);
+  return g;
+}
+
+/* ── 生き物（地球の地表と発射場で共用）──────────────── */
+function makeAnimal(kind){
+  const g = new THREE.Group(), legs = [];
+  const add=(m,x,y,z)=>{ m.position.set(x||0,y||0,z||0); g.add(m); return m; };
+  if(kind==='camel'){
+    const m = boxM(0xc09a62);
+    add(bx(2.3,1.05,0.85,m), 0,1.95,0);
+    add(bx(0.95,0.60,0.78,m), -0.15,2.62,0);              // こぶ
+    add(bx(0.38,1.25,0.38,m), 1.15,2.55,0);              // 首
+    add(bx(0.72,0.40,0.44,m), 1.38,3.18,0);              // 頭
+    for(const sx of [-0.8,0.8]) for(const sz of [-0.30,0.30]){
+      const l = bx(0.22,1.55,0.22,m); l.geometry.translate(0,-0.78,0);
+      legs.push(add(l, sx,1.5,sz));
+    }
+  } else if(kind==='dog'){
+    const m = boxM(0x9a7a52);
+    add(bx(1.15,0.50,0.42,m), 0,0.80,0);
+    add(bx(0.42,0.36,0.36,m), 0.72,1.02,0);
+    add(bx(0.16,0.20,0.14,m), 0.66,1.26,-0.12);          // 耳
+    add(bx(0.16,0.20,0.14,m), 0.66,1.26, 0.12);
+    add(bx(0.45,0.12,0.12,m), -0.70,0.98,0);             // 尾
+    for(const sx of [-0.4,0.4]) for(const sz of [-0.16,0.16]){
+      const l = bx(0.14,0.62,0.14,m); l.geometry.translate(0,-0.31,0);
+      legs.push(add(l, sx,0.60,sz));
+    }
+  } else if(kind==='lizard'){
+    const m = boxM(0x6f7a4a);
+    add(bx(0.90,0.20,0.34,m), 0,0.28,0);
+    add(bx(0.30,0.18,0.26,m), 0.58,0.30,0);
+    for(let i=0;i<4;i++) add(bx(0.26-i*0.05,0.10,0.16-i*0.03,m), -0.58-i*0.22,0.26,0);
+    for(const sx of [-0.28,0.28]) for(const sz of [-0.22,0.22]){
+      const l = bx(0.09,0.26,0.09,m); l.geometry.translate(0,-0.13,0);
+      legs.push(add(l, sx,0.24,sz));
+    }
+  } else if(kind==='crow'){
+    const m = boxM(0x22242c);
+    add(bx(0.62,0.28,0.26,m), 0,0,0);
+    add(bx(0.24,0.22,0.22,m), 0.40,0.06,0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.07,0.22,4), boxM(0x6b6250)), 0.56,0.05,0).rotation.z = -Math.PI/2;
+    add(bx(0.34,0.06,0.12,m), -0.44,0.02,0);
+    for(const sz of [-1,1]){
+      const w = bx(0.44,0.06,0.62,m); w.geometry.translate(0,0,sz*0.31);
+      legs.push(add(w, 0,0.10,sz*0.14));
+    }
+    g.userData.wing = 1;
+  } else {                                                // scorpion
+    const m = boxM(0x6d4a2c);
+    add(bx(0.40,0.14,0.28,m), 0,0.16,0);
+    for(let i=0;i<4;i++) add(bx(0.11,0.10,0.10,m), -0.26-i*0.10,0.20+i*0.07,0);
+    add(bx(0.09,0.09,0.09,boxM(0x8a5c34)), -0.66,0.46,0); // 毒針
+    for(const sz of [-1,1]) add(bx(0.22,0.06,0.09,m), 0.28,0.16,sz*0.14);  // はさみ
+    for(const sx of [-0.12,0.10]) for(const sz of [-0.17,0.17]){
+      const l = bx(0.05,0.16,0.05,m); l.geometry.translate(0,-0.08,0);
+      legs.push(add(l, sx,0.15,sz));
+    }
+  }
+  g.userData.legs = legs;
+  return g;
+}
+/* 地球の干上がった地表にいる5種。数・速さ・飛ぶかを種ごとに変える */
+const EARTH_LIFE = [ ['camel',3,1.7,0], ['dog',4,2.6,0], ['lizard',6,1.1,0],
+                     ['crow',5,7.0,1], ['scorpion',5,0.7,0] ];
+function spawnAnimals(list){
+  G.animals = [];
+  list.forEach(e=>{
+    const kind=e[0], count=e[1], spd=e[2], fly=e[3];
+    for(let i=0;i<count;i++){
+      const g = makeAnimal(kind);
+      const a = Math.random()*TAU, d = 22 + Math.random()*150;
+      scene.add(g);
+      G.animals.push({ g, spd, fly, x:Math.cos(a)*d, z:Math.sin(a)*d,
+                       face:Math.random()*TAU, t:Math.random()*4, turn:0,
+                       alt: fly ? 12+Math.random()*14 : 0, ph:Math.random()*TAU });
+    }
+  });
+}
+function updAnimals(dt){
+  const list = G.animals; if(!list || !list.length) return;
+  for(let i=0;i<list.length;i++){
+    const o = list[i];
+    o.t -= dt;
+    if(o.t <= 0){ o.t = 2.0 + Math.random()*5; o.turn = (Math.random()-0.5)*1.8; }
+    o.face += o.turn*dt;
+    o.x += Math.cos(o.face)*o.spd*dt; o.z += Math.sin(o.face)*o.spd*dt;
+    if(Math.hypot(o.x,o.z) > 195){ o.face += Math.PI; o.turn = 0; }   // 未踏査域へ出さない
+    const gy = meshHeightAt(o.x, o.z);
+    o.g.position.set(o.x, gy + (o.fly ? o.alt + Math.sin(T*0.9 + o.ph)*1.6 : 0), o.z);
+    o.g.rotation.y = -o.face + Math.PI/2;
+    const ls = o.g.userData.legs;
+    if(ls) for(let j=0;j<ls.length;j++){
+      if(o.g.userData.wing) ls[j].rotation.x = Math.sin(T*11 + o.ph)*0.85*(j?-1:1);
+      else ls[j].rotation.x = Math.sin(T*(o.spd*2.6) + o.ph + j*Math.PI/2)*0.45;
+    }
+  }
+}
+
+/* ── 打ち上げ ───────────────────────────────── */
+function buildLaunch(){
+  const cfg = SURF.port;
+  terrainInit('port', 3);
+  newScene(cfg.fogCol!=null ? cfg.fogCol : cfg.sky[1], 70, 620);
+  MODE='launch'; setCam(0.5, 9000); BGM.play('title');
+  G.t = 0; G.phase = 'wait'; G.up = 0; G.vel = 0; G.cnt = 0;
+  G.shake = new THREE.Vector3();
+  G.launchSkyMesh = gradientSky(cfg.sky[0], cfg.sky[1]); scene.add(G.launchSkyMesh);
+  G.launchSky = starField(1500, 1400, scene);
+  G.launchSky.material.opacity = 0;                      // 上がるにつれて星が出る
+  const sunDir = new THREE.Vector3(0.42,0.46,-0.78).normalize().multiplyScalar(900);
+  const sl = new THREE.DirectionalLight(0xfff0d2, 1.55); sl.position.copy(sunDir); scene.add(sl);
+  scene.add(new THREE.HemisphereLight(cfg.sky[1], cfg.ground[0], 0.78));
+  const ss = glowSprite(0xffeec2, 78, 0.95); ss.position.copy(sunDir); scene.add(ss);
+  G.terrain = buildTerrain(cfg); scene.add(G.terrain);
+  scene.add(buildCity());
+  G.haze = makeHaze({ color:0xf0d9a6, opacity:0.20, size:2.8, rise:1.0 }); scene.add(G.haze);
+
+  // 発射台と機体
+  const padY = meshHeightAt(0,0);
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(14,16,1.6,16), rockMat(0x77706a));
+  pad.position.set(0, padY+0.4, 0); scene.add(pad);
+  G.rocket = buildRocket(); G.rocket.position.set(0, padY+1.1, 0); scene.add(G.rocket);
+  G.gantry = buildGantry(); G.gantry.position.set(7.0, padY+1.1, 0); scene.add(G.gantry);
+  G.padY = padY;
+
+  // 見送る人たち（団扇をあおいでいる）
+  G.people = [];
+  for(let i=0;i<14;i++){
+    const a = 0.7 + i*0.42 + Math.random()*0.2, d = 24 + Math.random()*22;
+    const x = Math.cos(a)*d, z = Math.sin(a)*d;
+    const pp = makePerson();
+    pp.position.set(x, meshHeightAt(x,z), z);
+    pp.rotation.y = -Math.atan2(z,x) + Math.PI/2 + Math.PI;   // 機体の方を向く
+    scene.add(pp); G.people.push(pp);
+  }
+  spawnAnimals([['dog',3,2.4,0], ['crow',4,7.0,1], ['lizard',3,1.1,0]]);
+
+  camera.position.set(26, padY+7, 30);
+  camera.lookAt(0, padY+16, 0);
+  hudMode('surface');
+  Audio2.ambience(52, 0.05);
+  toast('第七宇宙港', '地球 ／ 気温 +48 ℃',
+        '水はもう街に届いていない。見送りの人たちが団扇をあおいでいる。', false);
+}
+
+function updLaunch(dt){
+  const padY = G.padY;
+  G.t += dt;
+  // 団扇
+  for(let i=0;i<G.people.length;i++){
+    const f = G.people[i].userData.fan;
+    f.rotation.z = Math.sin(T*6.2 + G.people[i].userData.ph)*0.62;
+    f.rotation.x = Math.sin(T*6.2 + G.people[i].userData.ph)*0.18;
+  }
+  updAnimals(dt); updHaze(dt);
+
+  const fl = G.rocket.userData.flame, halo = G.rocket.userData.halo;
+  if(G.phase === 'wait'){
+    const a = 0.22 + T*0.10;                      // ゆっくり機体を回り込む
+    camera.position.set(Math.cos(a)*56, padY+13 + Math.sin(T*0.4)*1.4, Math.sin(a)*56);
+    camera.lookAt(0, padY+17, 0);
+    hud({ t:'LAUNCH ─ 第七宇宙港', l1:'天体', v1:'地球', l2:'気温', v2:'+48 ℃',
+          l3:'状態', v3:'発射準備', bar:0 });
+    setActions([{l:'発射する', k:'A', f:()=>{ if(G.phase==='wait') launchIgnite(); }},
+                {l:'星図へ',  k:'SELECT', f:()=>{ finishLaunch(true); }}]);
+    setHint(usePadHint() ? '<b>A</b> 発射 ・ <b>SELECT</b> 星図へ'
+                         : '<b>SPACE / クリック</b> 発射 ・ <b>ESC</b> 星図へ');
+    return;
+  }
+
+  if(G.phase === 'ignite'){
+    const k = clamp(G.t/3.2, 0, 1);
+    fl.material.opacity = k*0.9; fl.scale.setScalar(0.35 + k*0.8);
+    halo.material.opacity = k*0.75; halo.scale.setScalar(0.5 + k*1.1);
+    G.shake.set((Math.random()-0.5)*k*0.5, (Math.random()-0.5)*k*0.4, (Math.random()-0.5)*k*0.5);
+    const c = 3 - Math.floor(k*3);
+    if(c !== G.cnt && c >= 1){ G.cnt = c; Audio2.blip(300+c*90, 0.2, 'square'); }
+    camera.position.set(34, padY+11, 40).add(G.shake);
+    camera.lookAt(0, padY+15, 0);
+    hud({ t:'LAUNCH ─ 第七宇宙港', l1:'天体', v1:'地球', l2:'気温', v2:'+48 ℃',
+          l3:'状態', v3:'点火 T−'+Math.max(1,c), bar:k*100 });
+    if(k >= 1){ G.phase='rise'; G.t=0; G.vel=9; Audio2.noise(2.4, 0.16); Audio2.chord([98,131,165]); }
+    return;
+  }
+
+  if(G.phase === 'rise' || G.phase === 'space'){
+    G.vel += (26 + G.up*0.16) * dt;                  // 上がるほど加速（到達まで約7秒）
+    G.up  += G.vel * dt;
+    G.rocket.position.y = padY + 1.1 + G.up;
+    const sway = Math.sin(G.up*0.012)*0.05;
+    G.rocket.rotation.z = -sway;
+    fl.scale.setScalar(1.05 + Math.sin(T*26)*0.10);
+    const shk = clamp(1 - G.up/900, 0.1, 1);
+    G.shake.set((Math.random()-0.5)*shk*0.6, (Math.random()-0.5)*shk*0.5, (Math.random()-0.5)*shk*0.6);
+    // 追いかけるカメラ。低いうちは見上げ、上がると横に付く
+    const t = clamp(G.up/260, 0, 1);
+    const cd = 30 + t*46;
+    camera.position.set(Math.cos(0.5+t*0.9)*cd, padY + 6 + G.up*t*0.92, Math.sin(0.5+t*0.9)*cd).add(G.shake);
+    camera.lookAt(0, G.rocket.position.y - 2, 0);
+    // 空が抜ける：霞が晴れ、星が出る
+    /* 空が抜ける。空メッシュは fog:false なので自分で暗くする。
+       星は h の二乗で出す（線形だと低空から白い点が見えて安っぽい）。 */
+    const h = clamp(G.up/620, 0, 1);
+    if(scene.fog){ scene.fog.near = 70 + h*2600; scene.fog.far = 620 + h*5200; }
+    G.launchSky.material.opacity = h*h;
+    G.launchSkyMesh.material.color.setScalar(Math.max(0.04, 1 - h*0.97));
+    hud({ t:'LAUNCH ─ 上昇', l1:'高度', v1:Math.round(G.up*0.42).toLocaleString()+' km',
+          l2:'速度', v2:Math.round(G.vel*12).toLocaleString()+' km/h',
+          l3:'状態', v3:h<1?'大気圏':'軌道へ', bar:h*100 });
+    setActions([{l:'星図へ', k:'SELECT', f:()=>finishLaunch(true)}]);
+    if(G.up > 620){ finishLaunch(false); }
+    return;
+  }
+}
+function launchIgnite(){
+  G.phase='ignite'; G.t=0; G.cnt=0;
+  Audio2.noise(1.6, 0.10);
+  toast('点火', 'メインエンジン始動', '押さえの腕が外れた。もう止まらない。', true);
+}
+function finishLaunch(skipped){
+  try{ localStorage.setItem(LAUNCH_KEY, '1'); }catch(e){}
+  if(!skipped) toast('出港', '第七宇宙港を離れる', 'ここへ帰ってくるために出ていく。', false);
+  openMap();
 }
 
 /* ── 待機（タイトル／星図の背景） ─────────────── */
@@ -3262,16 +3594,19 @@ function makeHaze(hz){
   }
   geo.setAttribute('position', new THREE.BufferAttribute(arr,3));
   const pt = new THREE.Points(geo, new THREE.PointsMaterial({ color:hz.color, size:hz.size,
-    transparent:true, opacity:hz.opacity, depthWrite:false, blending:THREE.AdditiveBlending }));
+    map:softDotTexture(), transparent:true, opacity:hz.opacity, depthWrite:false,
+    blending:THREE.AdditiveBlending }));
   pt.frustumCulled = false; pt.userData = { st };
   return pt;
 }
 function updHaze(dt){
   const h = G.haze; if(!h) return;
+  // 打ち上げ画面には主人公(G.pl)が居ない。中心は原点で代用する
+  const ctr = G.pl || ZERO2;
   const arr = h.geometry.attributes.position.array, st = h.userData.st;
   for(let i=0;i<st.length;i++){
     const q = st[i]; q.y += q.v*dt;
-    if(q.y > 26){ q.y = 0; q.x = G.pl.x + (Math.random()-0.5)*260; q.z = G.pl.z + (Math.random()-0.5)*260; }
+    if(q.y > 26){ q.y = 0; q.x = ctr.x + (Math.random()-0.5)*260; q.z = ctr.z + (Math.random()-0.5)*260; }
     arr[i*3]=q.x; arr[i*3+1]=meshHeightAt(q.x,q.z)+q.y; arr[i*3+2]=q.z;
   }
   h.geometry.attributes.position.needsUpdate = true;
@@ -3285,6 +3620,7 @@ function updHaze(dt){
    船へ戻ることになるため、発見のための例外。
    fall は m/s（そのまま高さに足す）、wind は横の流速 m/s。 */
 const WX_FOG = new THREE.Color(), WX_SKY = new THREE.Color();
+const ZERO2 = { x:0, z:0 };
 const WX_KIND = {
   dust:{ every:180, first:22, dur:26, n:3000, color:0xb86234, size:1.3, opacity:0.5,
          area:40, high:24, fall:-2.0, wind:46, fogNear:5, fogFar:84, sun:0.28,
@@ -3603,6 +3939,10 @@ function buildSurface(obj, isSat){
   }
   // 温暖化した地球：熱の霞
   if(cfg.heat || cfg.haze){ G.haze = makeHaze(cfg.haze); scene.add(G.haze); }
+  // 干上がった地球の生き物5種
+  G.animals = null;
+  if(cfgName==='port') spawnAnimals(EARTH_LIFE);
+
   // 天候（火星＝砂嵐/雪、タイタン＝メタンの霧雨）
   if(WX[cfgName]){
     G.wx = { list: WX[cfgName].map(k=>{
@@ -3837,6 +4177,7 @@ function updSurface(dt){
     G.stepAcc = (G.stepAcc||0) + Math.hypot(pl.vx, pl.vz)*dt;
     if(G.stepAcc > stp.every){ G.stepAcc = 0; stp.play(); }
   } else G.stepAcc = 0;
+  updAnimals(dt);
   updGeysers(dt); updHaze(dt); updWeatherFx(dt);
   if(G.shake) G.shake.set(0,0,0);
   updWeather(dt);
@@ -4200,7 +4541,12 @@ function boot(){
     el.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
   };
-  bindTapBtn('btnStart', ()=>{ Audio2.init(); Audio2.ambience(58,0.055); openMap(); });
+  bindTapBtn('btnStart', ()=>{
+    Audio2.init(); Audio2.ambience(58,0.055);
+    let done = false;
+    try{ done = localStorage.getItem(LAUNCH_KEY)==='1'; }catch(e){}
+    if(done) openMap(); else buildLaunch();       // 初回だけ地球からの打ち上げを見せる
+  });
   bindTapBtn('btnLog0', toggleLog);
   bindTapBtn('btnLog1', toggleLog);
   bindTapBtn('btnLog2', toggleLog);
