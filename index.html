@@ -2264,6 +2264,88 @@ function sunMaterial(map){
   });
 }
 
+/* ── 太陽の活動（2026-09-23 タイタン指示）────────────────────
+   プロミネンス＝磁力線に沿って持ち上がった紅炎。太陽面に「立っている輪」として作る。
+   フレア＝一瞬の爆発的な増光。どちらも加算合成で、太陽本体より明るく出す。
+   トーラスは XY 平面に描かれ、弧の中心は角度 arc/2 の向きにある。
+   -arc/2 だけ Z 回転して膨らみを +X へ向け、その +X を太陽面の法線 d に合わせると
+   「両足が太陽面に接し、外へ弓なりに張り出した輪」になる。 */
+function makeProminence(R){
+  const r = R*(0.10 + Math.random()*0.13);
+  const arc = Math.PI*(0.85 + Math.random()*0.75);
+  const m = new THREE.Mesh(
+    new THREE.TorusGeometry(r, r*(0.10 + Math.random()*0.11), 6, 24, arc),
+    new THREE.MeshBasicMaterial({ color:0xff5a14, transparent:true, opacity:0,
+      blending:THREE.AdditiveBlending, depthWrite:false, fog:false }));
+  m.rotation.z = -arc/2;
+  const grp = new THREE.Group(); grp.add(m);
+  grp.userData.mat = m.material;
+  return grp;
+}
+function placeProminence(pr, R){
+  const d = new THREE.Vector3(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
+  pr.dir = d.clone();
+  pr.mesh.position.copy(d).multiplyScalar(R*0.985);
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1,0,0), d);
+  q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), Math.random()*TAU));
+  pr.mesh.quaternion.copy(q);
+  pr.t = 0; pr.life = 14 + Math.random()*26; pr.peak = 1.15 + Math.random()*0.6;
+  pr.ph = Math.random()*TAU;
+}
+function buildSolar(R){
+  const proms = [];
+  for(let i=0;i<7;i++){
+    const pr = { mesh: makeProminence(R) };
+    placeProminence(pr, R); pr.t = Math.random()*pr.life;   // 到着時に育ち具合をばらす
+    scene.add(pr.mesh); proms.push(pr);
+  }
+  const flares = [];
+  for(let i=0;i<3;i++){
+    const f = glowSprite(0xfff0c4, R*0.5, 0);
+    f.visible = false; scene.add(f); flares.push({ s:f, t:0, life:0 });
+  }
+  return { R, proms, flares, next: 3 + Math.random()*6 };
+}
+function updSolar(dt){
+  const S = G.solar; if(!S) return;
+  for(let i=0;i<S.proms.length;i++){
+    const pr = S.proms[i];
+    pr.t += dt;
+    const k = pr.t/pr.life;
+    // 立ち上がり15%・減衰20%の包絡。消えたら別の場所へ立て直す
+    const env = k < 0.15 ? k/0.15 : (k > 0.80 ? (1-k)/0.20 : 1);
+    /* 縁（リム）に立っているものだけ光らせる。太陽面の正面に来たものを同じ明るさで
+       出すと、加算合成が明るい光球に乗って白い輪になり「面に置いた輪」に見えた。
+       実物も、紅炎として見えるのは縁に出たときだけ（正面ではダークフィラメント）。 */
+    const view = camera.position.clone().normalize();
+    const limb = 1 - clamp((Math.abs(pr.dir.dot(view)) - 0.10)/0.58, 0, 1);
+    pr.mesh.userData.mat.opacity = clamp(env,0,1) * pr.peak * limb;
+    const w = 1 + Math.sin(T*0.75 + pr.ph)*0.07;
+    pr.mesh.scale.set(w, w*(1 + Math.sin(T*0.52 + pr.ph)*0.13), w);
+    if(k >= 1) placeProminence(pr, S.R);
+  }
+  // フレア：短く強い増光。太陽面のランダムな点で膨らみながら消える
+  S.next -= dt;
+  if(S.next <= 0){
+    S.next = 4 + Math.random()*10;
+    const f = S.flares.filter(x=>x.life<=0)[0];
+    if(f){
+      const d = new THREE.Vector3(Math.random()*2-1, Math.random()*2-1, Math.random()*2-1).normalize();
+      f.s.position.copy(d).multiplyScalar(S.R*0.96);
+      f.life = 0.9 + Math.random()*0.8; f.t = 0; f.s.visible = true;
+    }
+  }
+  for(let i=0;i<S.flares.length;i++){
+    const f = S.flares[i]; if(f.life <= 0) continue;
+    f.t += dt;
+    const k = clamp(f.t/f.life, 0, 1);
+    f.s.material.opacity = Math.pow(1-k, 1.8) * 0.95;
+    const sc = 0.35 + k*1.5;
+    f.s.scale.setScalar(sc);
+    if(k >= 1){ f.life = 0; f.s.visible = false; }
+  }
+}
+
 /* ── 自転（2026-09-23 タイタン指示）──────────────────────────
    [自転周期(時間), 自転軸の傾き(度)]。周期のマイナスは逆行（金星・天王星・トリトン）。
    衛星はすべて潮汐固定なので公転周期＝自転周期をそのまま入れている。 */
@@ -2509,6 +2591,9 @@ function enterOrbit(b){
   /* 金星：硫酸の雲の中で光る稲光（2026-09-23 タイタン指示）。
      雲頂のすぐ上に加算合成の光点を置き、ランダムな場所で一瞬だけ光らせる。
      地表の落雷（storm）とは別物で、こちらは軌道から見える大気の発光。 */
+  // 太陽：プロミネンスとフレア
+  G.solar = (b.id === 'sun') ? buildSolar(b.rad) : null;
+
   G.atmoFlash = null;
   if(b.id==='venus'){
     const pool = [];
@@ -2575,6 +2660,7 @@ function updOrbit(dt){
     m.position.copy(spherePos(R*m.userData.orbitR, m.userData.lat, m.userData.ang));
     spinPlanet(m, dt);
   }
+  updSolar(dt);
   // 金星の稲光：雲頂のすぐ外側のランダムな点で一瞬だけ光る
   const af = G.atmoFlash;
   if(af){
